@@ -138,6 +138,26 @@ To generate a new OAuth2 token:
 uv run imap_mcp.auth_setup generate-token --config config.yaml
 ```
 
+## Available Tools
+
+The following tools are available to the AI agent:
+
+| Tool Name | Description | Key Parameters |
+| :--- | :--- | :--- |
+| **`search_emails`** | Searches for emails across folders. | `query`, `folder` (opt), `criteria` (text/from/subject/etc), `limit` |
+| **`process_email`** | Performs an action on an email (move, read, flag, delete). | `folder`, `uid`, `action`, `target_folder` (for move) |
+| **`process_meeting_invite`** | **(Smart Workflow)** Identifies meeting invites, checks availability, and drafts a reply. | `folder`, `uid`, `availability_mode` |
+| **`draft_reply_tool`** | Creates a draft reply to an email. | `folder`, `uid`, `reply_body`, `reply_all`, `cc` |
+| **`create_task`** | Creates a local task from email content. | `description`, `due_date`, `priority` |
+| **`move_email`** | Moves an email to another folder. | `folder`, `uid`, `target_folder` |
+| **`mark_as_read`** | Marks an email as read. | `folder`, `uid` |
+| **`mark_as_unread`** | Marks an email as unread. | `folder`, `uid` |
+| **`flag_email`** | Flags (stars) an email. | `folder`, `uid`, `flag` (bool) |
+| **`delete_email`** | Deletes an email. | `folder`, `uid` |
+| **`draft_meeting_reply_tool`** | Low-level tool to draft a meeting reply. | `invite_details`, `availability_status` |
+| **`check_calendar_availability_tool`** | Low-level tool to check calendar availability. | `start_time`, `end_time` |
+| **`identify_meeting_invite_tool`** | Low-level tool to parse invite details. | `folder`, `uid` |
+
 ## Development
 
 ### Setting Up Development Environment
