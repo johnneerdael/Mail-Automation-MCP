@@ -188,28 +188,56 @@ Once the server is running on `http://localhost:8000`, connect it to your prefer
 
 The server uses **Streamable HTTP** transport at the `/mcp` endpoint: `http://localhost:8000/mcp`
 
+### With Bearer Authentication
+
+If you enabled `bearer_auth` in your config.yaml, you'll need to include the token in your client configuration. The token is logged on server startup:
+
+```
+INFO - Bearer authentication enabled. Token: yQvmWzhgvpGph8T_uk1TWC5Sy7VaiDxoVWY-xUxiaew
+```
+
+See [Security Guide](/guide/security) for details on enabling authentication.
+
+---
+
 ### Claude Code (CLI)
 
+**Without auth:**
 ```bash
 claude mcp add --transport http workspace-secretary http://localhost:8000/mcp
 ```
 
+**With auth:**
+```bash
+claude mcp add --transport http workspace-secretary http://localhost:8000/mcp \
+  --header "Authorization: Bearer YOUR_TOKEN"
+```
+
 ### Claude Desktop
-
-Open Claude Desktop and navigate to **Settings > Connectors > Add Custom Connector**:
-- Name: `workspace-secretary`
-- URL: `http://localhost:8000/mcp`
-
-Or edit `claude_desktop_config.json` manually:
 
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
+**Without auth:**
 ```json
 {
   "mcpServers": {
     "workspace-secretary": {
       "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
     }
   }
 }
@@ -217,8 +245,9 @@ Or edit `claude_desktop_config.json` manually:
 
 ### Cursor
 
-Go to **Settings → Cursor Settings → MCP → Add new global MCP server**, or edit `~/.cursor/mcp.json`:
+Edit `~/.cursor/mcp.json`:
 
+**Without auth:**
 ```json
 {
   "mcpServers": {
@@ -229,10 +258,25 @@ Go to **Settings → Cursor Settings → MCP → Add new global MCP server**, or
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### VS Code (GitHub Copilot)
 
-Add to your VS Code settings (`.vscode/settings.json` or user settings):
+Add to `.vscode/settings.json` or user settings:
 
+**Without auth:**
 ```json
 {
   "mcp": {
@@ -246,10 +290,26 @@ Add to your VS Code settings (`.vscode/settings.json` or user settings):
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcp": {
+    "servers": {
+      "workspace-secretary": {
+        "type": "http",
+        "url": "http://localhost:8000/mcp",
+        "headers": {
+          "Authorization": "Bearer YOUR_TOKEN"
+        }
+      }
+    }
+  }
+}
+```
+
 ### Windsurf
 
-Edit your Windsurf MCP config file:
-
+**Without auth:**
 ```json
 {
   "mcpServers": {
@@ -260,13 +320,27 @@ Edit your Windsurf MCP config file:
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "serverUrl": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### Cline
 
 1. Open **Cline** in VS Code
 2. Click the hamburger menu → **MCP Servers**
 3. Choose **Remote Servers** tab → **Edit Configuration**
-4. Add:
 
+**Without auth:**
 ```json
 {
   "mcpServers": {
@@ -278,10 +352,24 @@ Edit your Windsurf MCP config file:
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "url": "http://localhost:8000/mcp",
+      "type": "streamableHttp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### OpenCode
 
-Add to your OpenCode configuration:
-
+**Without auth:**
 ```json
 {
   "mcp": {
@@ -294,10 +382,27 @@ Add to your OpenCode configuration:
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcp": {
+    "workspace-secretary": {
+      "type": "remote",
+      "url": "http://localhost:8000/mcp",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### Zed
 
 Add to your Zed `settings.json`:
 
+**Without auth:**
 ```json
 {
   "context_servers": {
@@ -310,12 +415,28 @@ Add to your Zed `settings.json`:
 }
 ```
 
+**With auth:**
+```json
+{
+  "context_servers": {
+    "workspace-secretary": {
+      "settings": {
+        "url": "http://localhost:8000/mcp",
+        "headers": {
+          "Authorization": "Bearer YOUR_TOKEN"
+        }
+      }
+    }
+  }
+}
+```
+
 ### JetBrains AI Assistant
 
 1. Go to **Settings → Tools → AI Assistant → Model Context Protocol (MCP)**
 2. Click **+ Add** → **As JSON**
-3. Add:
 
+**Without auth:**
 ```json
 {
   "mcpServers": {
@@ -326,8 +447,23 @@ Add to your Zed `settings.json`:
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### Roo Code / Kilo Code
 
+**Without auth:**
 ```json
 {
   "mcpServers": {
@@ -339,17 +475,44 @@ Add to your Zed `settings.json`:
 }
 ```
 
+**With auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "type": "streamable-http",
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  }
+}
+```
+
 ### Gemini CLI
 
 Edit `~/.gemini/settings.json`:
 
+**Without auth:**
+```json
+{
+  "mcpServers": {
+    "workspace-secretary": {
+      "httpUrl": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+**With auth:**
 ```json
 {
   "mcpServers": {
     "workspace-secretary": {
       "httpUrl": "http://localhost:8000/mcp",
       "headers": {
-        "Accept": "application/json, text/event-stream"
+        "Authorization": "Bearer YOUR_TOKEN"
       }
     }
   }
@@ -365,6 +528,7 @@ For any MCP client supporting Streamable HTTP:
 | Type | `http` / `streamable-http` |
 | URL | `http://localhost:8000/mcp` |
 | Transport | Streamable HTTP |
+| Auth Header | `Authorization: Bearer YOUR_TOKEN` (if enabled) |
 
 **Restart your AI client** after adding the configuration.
 
