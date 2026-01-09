@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-Complete reference for all Google Workspace Secretary MCP tools.
+Complete reference for all Gmail Secretary MCP tools.
 
 ::: tip AI-Native Design
 These aren't protocol wrappers—they're **secretary workflows** designed for AI assistants:

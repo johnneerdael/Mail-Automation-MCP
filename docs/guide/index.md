@@ -1,6 +1,6 @@
 # Guide
 
-Welcome to **Google Workspace Secretary MCP** — an AI-native Gmail client exposed as MCP tools, built around safe automation primitives.
+Welcome to **Gmail Secretary MCP** — an AI-native Gmail client exposed as MCP tools, built around safe automation primitives.
 
 ::: tip What This Is
 **Secretary MCP is not an IMAP library.** It's a workflow engine for AI assistants that provides:

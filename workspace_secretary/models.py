@@ -162,16 +162,22 @@ class Email:
     cc: List[EmailAddress] = field(default_factory=list)
     bcc: List[EmailAddress] = field(default_factory=list)
     date: Optional[datetime] = None
+    internal_date: Optional[datetime] = None
     content: EmailContent = field(default_factory=EmailContent)
     attachments: List[EmailAttachment] = field(default_factory=list)
     flags: List[str] = field(default_factory=list)
     headers: Dict[str, str] = field(default_factory=dict)
     folder: Optional[str] = None
     uid: Optional[int] = None
+    size: int = 0
+    modseq: int = 0
     in_reply_to: Optional[str] = None
     references: List[str] = field(default_factory=list)
     gmail_thread_id: Optional[str] = None
+    gmail_msgid: Optional[int] = None
     gmail_labels: List[str] = field(default_factory=list)
+    has_attachments: bool = False
+    attachment_filenames: List[str] = field(default_factory=list)
 
     @classmethod
     def from_message(

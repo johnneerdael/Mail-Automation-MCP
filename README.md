@@ -1,13 +1,38 @@
 # Gmail Secretary MCP
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
+[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An AI-native Model Context Protocol (MCP) server that transforms your Gmail and Google Calendar into an intelligent, programmable assistant for Claude and other AI systems.
 
 [📚 **Full Documentation**](https://johnneerdael.github.io/Google-Workspace-Secretary-MCP/) · [🚀 **Quick Start**](#-quick-start) · [🔒 **Security**](#-security-best-practices)
 
-## What's NEW in v4.0.0
+---
+
+## What's New in v4.1.0
+
+**CONDSTORE & IDLE Support** — Efficient incremental sync with push notifications:
+
+- ⚡ **CONDSTORE (RFC 7162)**: Skip sync when mailbox unchanged, fetch only changed flags
+- 📬 **IMAP IDLE (RFC 2177)**: Push-based notifications for instant new mail detection
+- 🏷️ **Gmail Extensions**: Native X-GM-MSGID, X-GM-THRID, X-GM-LABELS support
+- 📎 **Attachment Metadata**: `has_attachments` and `attachment_filenames` in database
+- 🔄 **Debounced Sync**: Mutations trigger 2-second debounced sync to batch changes
+
+### Performance Improvements
+
+| Scenario | Before | After |
+|----------|--------|-------|
+| Unchanged mailbox | Fetch all UIDs, compare | Skip entirely (HIGHESTMODSEQ) |
+| Flag changes only | Re-fetch entire message | Fetch only changed flags (CHANGEDSINCE) |
+| New mail detection | 5-minute poll interval | Instant via IDLE |
+| Rapid mutations | Sync per mutation | Single batched sync |
+
+See the [Architecture Documentation](https://johnneerdael.github.io/Google-Workspace-Secretary-MCP/architecture.html) for details.
+
+---
+
+## What's New in v4.0.0
 
 ### Complete Architecture Rewrite
 

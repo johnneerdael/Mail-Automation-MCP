@@ -1,6 +1,6 @@
 # Configuration
 
-Complete configuration reference for Google Workspace Secretary MCP.
+Complete configuration reference for Gmail Secretary MCP.
 
 ## Configuration File
 

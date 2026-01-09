@@ -2,12 +2,12 @@
 layout: home
 
 hero:
-  name: "Google Workspace Secretary"
+  name: "Gmail Secretary"
   text: "AI-Native MCP Server"
   tagline: Transform Gmail and Google Calendar into an intelligent, AI-powered knowledge base
   image:
     src: /hero-image.svg
-    alt: Google Workspace Secretary MCP
+    alt: Gmail Secretary MCP
   actions:
     - theme: brand
       text: Get Started
@@ -85,9 +85,9 @@ Then start with: `docker compose up -d`
 
 See [Getting Started](/getting-started) for complete installation instructions.
 
-## Why Google Workspace Secretary MCP?
+## Why Gmail Secretary MCP?
 
-Traditional email clients are built for humans. **Google Workspace Secretary MCP** is built for AI assistants.
+Traditional email clients are built for humans. **Gmail Secretary MCP** is built for AI assistants.
 
 - **Instant reads**: SQLite cache means sub-millisecond email queries
 - **Persistent connections**: Engine maintains IMAP connection (no per-request reconnect)
@@ -125,6 +125,25 @@ The AI:
 2. Extracts PDF text with `get_attachment_content()`
 3. Parses and presents the total
 :::
+
+## What's New in v4.1.0
+
+**CONDSTORE & IDLE Support** — Efficient incremental sync with push notifications:
+
+- ⚡ **CONDSTORE (RFC 7162)**: Skip sync when mailbox unchanged, fetch only changed flags via CHANGEDSINCE
+- 📬 **IMAP IDLE (RFC 2177)**: Push-based notifications for instant new mail detection
+- 🏷️ **Gmail Extensions**: Native X-GM-MSGID, X-GM-THRID, X-GM-LABELS support
+- 📎 **Attachment Metadata**: `has_attachments` and `attachment_filenames` stored in database
+- 🔄 **Debounced Sync**: Mutations trigger 2-second debounced sync to batch rapid changes
+
+### Performance Improvements
+
+| Scenario | Before | After |
+|----------|--------|-------|
+| Unchanged mailbox | Fetch all UIDs, compare | Skip entirely (HIGHESTMODSEQ) |
+| Flag changes only | Re-fetch entire message | Fetch only changed flags |
+| New mail detection | 5-minute poll interval | Instant via IDLE |
+| Rapid mutations | Sync per mutation | Single batched sync |
 
 ## What's New in v4.0.0
 

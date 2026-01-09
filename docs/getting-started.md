@@ -1,6 +1,6 @@
 # Getting Started
 
-Get up and running with Google Workspace Secretary MCP in minutes.
+Get up and running with Gmail Secretary MCP in minutes.
 
 ::: tip What This Is
 **Secretary MCP is an AI-native Gmail client** — not an IMAP library. It provides:

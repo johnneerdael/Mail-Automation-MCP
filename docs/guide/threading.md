@@ -1,6 +1,6 @@
 # Email Threading (v2.2.0)
 
-Google Workspace Secretary v2.2.0 introduces full RFC 5256 threading support, enabling accurate conversation grouping with automatic migration for existing databases.
+Gmail Secretary v2.2.0 introduces full RFC 5256 threading support, enabling accurate conversation grouping with automatic migration for existing databases.
 
 ## Overview
 

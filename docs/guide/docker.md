@@ -1,6 +1,6 @@
 # Docker Deployment
 
-Deploy Google Workspace Secretary MCP with Docker for persistent email caching and reliable operation.
+Deploy Gmail Secretary MCP with Docker for persistent email caching and reliable operation.
 
 ## Prerequisites
 

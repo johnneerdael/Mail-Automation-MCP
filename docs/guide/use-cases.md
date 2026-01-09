@@ -1,6 +1,6 @@
-# Google Workspace Secretary: Use Cases & Workflows
+# Gmail Secretary: Use Cases & Workflows
 
-This document outlines the high-level workflows that the Google Workspace Secretary MCP enables for AI agents. By combining Gmail and Calendar tools, the server acts as a high-performance executive assistant.
+This document outlines the high-level workflows that the Gmail Secretary MCP enables for AI agents. By combining Gmail and Calendar tools, the server acts as a high-performance executive assistant.
 
 ## 1. The Monday Morning Triage
 **Goal**: Get a structured overview of the week and prioritize the inbox.

@@ -57,17 +57,38 @@ class DatabaseInterface(ABC):
         from_addr: str,
         to_addr: str,
         cc_addr: str,
+        bcc_addr: str,
         date: Optional[str],
+        internal_date: Optional[str],
         body_text: str,
         body_html: str,
         flags: str,
         is_unread: bool,
         is_important: bool,
         size: int,
+        modseq: int,
         in_reply_to: str,
         references_header: str,
+        gmail_thread_id: Optional[int],
+        gmail_msgid: Optional[int],
+        gmail_labels: Optional[list[str]],
+        has_attachments: bool,
+        attachment_filenames: Optional[list[str]],
     ) -> None:
         """Insert or update an email record."""
+        pass
+
+    @abstractmethod
+    def update_email_flags(
+        self,
+        uid: int,
+        folder: str,
+        flags: str,
+        is_unread: bool,
+        modseq: int,
+        gmail_labels: Optional[list[str]] = None,
+    ) -> None:
+        """Update only flags/labels for existing email (CONDSTORE optimization)."""
         pass
 
     @abstractmethod
@@ -257,7 +278,9 @@ class SqliteDatabase(DatabaseInterface):
                     from_addr TEXT,
                     to_addr TEXT,
                     cc_addr TEXT,
+                    bcc_addr TEXT,
                     date TEXT,
+                    internal_date TEXT,
                     body_text TEXT,
                     body_html TEXT,
                     flags TEXT,
@@ -268,10 +291,12 @@ class SqliteDatabase(DatabaseInterface):
                     synced_at TEXT,
                     in_reply_to TEXT,
                     references_header TEXT,
-                    thread_root_uid INTEGER,
-                    thread_parent_uid INTEGER,
-                    thread_depth INTEGER DEFAULT 0,
                     content_hash TEXT,
+                    gmail_thread_id INTEGER,
+                    gmail_msgid INTEGER,
+                    gmail_labels TEXT,
+                    has_attachments INTEGER DEFAULT 0,
+                    attachment_filenames TEXT,
                     PRIMARY KEY (uid, folder)
                 )
                 """
@@ -299,6 +324,15 @@ class SqliteDatabase(DatabaseInterface):
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_content_hash ON emails(content_hash)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_gmail_thread_id ON emails(gmail_thread_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_has_attachments ON emails(has_attachments)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_internal_date ON emails(internal_date)"
             )
 
             # Create FTS5 virtual table for full-text search
@@ -417,15 +451,23 @@ class SqliteDatabase(DatabaseInterface):
         from_addr: str,
         to_addr: str,
         cc_addr: str,
+        bcc_addr: str,
         date: Optional[str],
+        internal_date: Optional[str],
         body_text: str,
         body_html: str,
         flags: str,
         is_unread: bool,
         is_important: bool,
         size: int,
+        modseq: int,
         in_reply_to: str,
         references_header: str,
+        gmail_thread_id: Optional[int],
+        gmail_msgid: Optional[int],
+        gmail_labels: Optional[list[str]],
+        has_attachments: bool,
+        attachment_filenames: Optional[list[str]],
     ) -> None:
         import hashlib
 
@@ -433,14 +475,22 @@ class SqliteDatabase(DatabaseInterface):
         content = f"{subject or ''}{body_text}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()[:32]
 
+        # Convert lists to comma-separated strings for SQLite
+        gmail_labels_str = ",".join(gmail_labels) if gmail_labels else None
+        attachment_filenames_str = (
+            ",".join(attachment_filenames) if attachment_filenames else None
+        )
+
         with self._get_email_connection() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO emails (
                     uid, folder, message_id, subject, from_addr, to_addr, cc_addr,
-                    date, body_text, body_html, flags, is_unread, is_important,
-                    size, synced_at, in_reply_to, references_header, content_hash
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    bcc_addr, date, internal_date, body_text, body_html, flags,
+                    is_unread, is_important, size, modseq, synced_at, in_reply_to,
+                    references_header, content_hash, gmail_thread_id, gmail_msgid,
+                    gmail_labels, has_attachments, attachment_filenames
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     uid,
@@ -450,17 +500,56 @@ class SqliteDatabase(DatabaseInterface):
                     from_addr,
                     to_addr,
                     cc_addr,
+                    bcc_addr,
                     date,
+                    internal_date,
                     body_text,
                     body_html,
                     flags,
                     is_unread,
                     is_important,
                     size,
+                    modseq,
                     datetime.utcnow().isoformat(),
                     in_reply_to,
                     references_header,
                     content_hash,
+                    gmail_thread_id,
+                    gmail_msgid,
+                    gmail_labels_str,
+                    1 if has_attachments else 0,
+                    attachment_filenames_str,
+                ),
+            )
+            conn.commit()
+
+    def update_email_flags(
+        self,
+        uid: int,
+        folder: str,
+        flags: str,
+        is_unread: bool,
+        modseq: int,
+        gmail_labels: Optional[list[str]] = None,
+    ) -> None:
+        """Update only flags/labels for existing email (CONDSTORE optimization)."""
+        gmail_labels_str = ",".join(gmail_labels) if gmail_labels else None
+
+        with self._get_email_connection() as conn:
+            conn.execute(
+                """
+                UPDATE emails SET flags = ?, is_unread = ?, modseq = ?, 
+                    gmail_labels = COALESCE(?, gmail_labels), synced_at = ?
+                WHERE uid = ? AND folder = ?
+                """,
+                (
+                    flags,
+                    is_unread,
+                    modseq,
+                    gmail_labels_str,
+                    datetime.utcnow().isoformat(),
+                    uid,
+                    folder,
                 ),
             )
             conn.commit()
@@ -907,7 +996,9 @@ class PostgresDatabase(DatabaseInterface):
                         from_addr TEXT,
                         to_addr TEXT,
                         cc_addr TEXT,
+                        bcc_addr TEXT,
                         date TIMESTAMPTZ,
+                        internal_date TIMESTAMPTZ,
                         body_text TEXT,
                         body_html TEXT,
                         flags TEXT,
@@ -918,10 +1009,12 @@ class PostgresDatabase(DatabaseInterface):
                         synced_at TIMESTAMPTZ DEFAULT NOW(),
                         in_reply_to TEXT,
                         references_header TEXT,
-                        thread_root_uid INTEGER,
-                        thread_parent_uid INTEGER,
-                        thread_depth INTEGER DEFAULT 0,
                         content_hash TEXT,
+                        gmail_thread_id BIGINT,
+                        gmail_msgid BIGINT,
+                        gmail_labels JSONB,
+                        has_attachments BOOLEAN DEFAULT FALSE,
+                        attachment_filenames JSONB,
                         PRIMARY KEY (uid, folder)
                     )
                     """
@@ -1027,6 +1120,18 @@ class PostgresDatabase(DatabaseInterface):
                     "CREATE INDEX IF NOT EXISTS idx_emails_content_hash ON emails(content_hash)"
                 )
                 cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_emails_gmail_thread_id ON emails(gmail_thread_id)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_emails_gmail_labels ON emails USING gin(gmail_labels)"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_emails_has_attachments ON emails(has_attachments) WHERE has_attachments = true"
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_emails_internal_date ON emails(internal_date)"
+                )
+                cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_events_calendar ON events(calendar_id)"
                 )
                 cur.execute(
@@ -1076,20 +1181,35 @@ class PostgresDatabase(DatabaseInterface):
         from_addr: str,
         to_addr: str,
         cc_addr: str,
+        bcc_addr: str,
         date: Optional[str],
+        internal_date: Optional[str],
         body_text: str,
         body_html: str,
         flags: str,
         is_unread: bool,
         is_important: bool,
         size: int,
+        modseq: int,
         in_reply_to: str,
         references_header: str,
+        gmail_thread_id: Optional[int],
+        gmail_msgid: Optional[int],
+        gmail_labels: Optional[list[str]],
+        has_attachments: bool,
+        attachment_filenames: Optional[list[str]],
     ) -> None:
         import hashlib
+        import json
 
         content = f"{subject or ''}{body_text}"
         content_hash = hashlib.sha256(content.encode()).hexdigest()[:32]
+
+        # Convert lists to JSON for PostgreSQL JSONB columns
+        gmail_labels_json = json.dumps(gmail_labels) if gmail_labels else None
+        attachment_filenames_json = (
+            json.dumps(attachment_filenames) if attachment_filenames else None
+        )
 
         with self.connection() as conn:
             with conn.cursor() as cur:
@@ -1097,26 +1217,36 @@ class PostgresDatabase(DatabaseInterface):
                     """
                     INSERT INTO emails (
                         uid, folder, message_id, subject, from_addr, to_addr, cc_addr,
-                        date, body_text, body_html, flags, is_unread, is_important,
-                        size, synced_at, in_reply_to, references_header, content_hash
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+                        bcc_addr, date, internal_date, body_text, body_html, flags,
+                        is_unread, is_important, size, modseq, synced_at, in_reply_to,
+                        references_header, content_hash, gmail_thread_id, gmail_msgid,
+                        gmail_labels, has_attachments, attachment_filenames
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (uid, folder) DO UPDATE SET
                         message_id = EXCLUDED.message_id,
                         subject = EXCLUDED.subject,
                         from_addr = EXCLUDED.from_addr,
                         to_addr = EXCLUDED.to_addr,
                         cc_addr = EXCLUDED.cc_addr,
+                        bcc_addr = EXCLUDED.bcc_addr,
                         date = EXCLUDED.date,
+                        internal_date = EXCLUDED.internal_date,
                         body_text = EXCLUDED.body_text,
                         body_html = EXCLUDED.body_html,
                         flags = EXCLUDED.flags,
                         is_unread = EXCLUDED.is_unread,
                         is_important = EXCLUDED.is_important,
                         size = EXCLUDED.size,
+                        modseq = EXCLUDED.modseq,
                         synced_at = NOW(),
                         in_reply_to = EXCLUDED.in_reply_to,
                         references_header = EXCLUDED.references_header,
-                        content_hash = EXCLUDED.content_hash
+                        content_hash = EXCLUDED.content_hash,
+                        gmail_thread_id = EXCLUDED.gmail_thread_id,
+                        gmail_msgid = EXCLUDED.gmail_msgid,
+                        gmail_labels = EXCLUDED.gmail_labels,
+                        has_attachments = EXCLUDED.has_attachments,
+                        attachment_filenames = EXCLUDED.attachment_filenames
                     """,
                     (
                         uid,
@@ -1126,17 +1256,51 @@ class PostgresDatabase(DatabaseInterface):
                         from_addr,
                         to_addr,
                         cc_addr,
+                        bcc_addr,
                         date,
+                        internal_date,
                         body_text,
                         body_html,
                         flags,
                         is_unread,
                         is_important,
                         size,
+                        modseq,
                         in_reply_to,
                         references_header,
                         content_hash,
+                        gmail_thread_id,
+                        gmail_msgid,
+                        gmail_labels_json,
+                        has_attachments,
+                        attachment_filenames_json,
                     ),
+                )
+                conn.commit()
+
+    def update_email_flags(
+        self,
+        uid: int,
+        folder: str,
+        flags: str,
+        is_unread: bool,
+        modseq: int,
+        gmail_labels: Optional[list[str]] = None,
+    ) -> None:
+        """Update only flags/labels for existing email (CONDSTORE optimization)."""
+        import json
+
+        gmail_labels_json = json.dumps(gmail_labels) if gmail_labels else None
+
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE emails SET flags = %s, is_unread = %s, modseq = %s,
+                        gmail_labels = COALESCE(%s, gmail_labels), synced_at = NOW()
+                    WHERE uid = %s AND folder = %s
+                    """,
+                    (flags, is_unread, modseq, gmail_labels_json, uid, folder),
                 )
                 conn.commit()
 

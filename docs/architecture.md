@@ -4,7 +4,7 @@ This document describes the **read/write split architecture** introduced in v4.0
 
 ## Overview
 
-The Google Workspace Secretary MCP uses a **dual-process architecture** with strict separation of concerns:
+The Gmail Secretary MCP uses a **dual-process architecture** with strict separation of concerns:
 
 - **Engine** (`secretary-engine`): Owns all data mutations and external API connections
 - **MCP** (`secretary-mcp`): Read-only database access, delegates mutations to Engine

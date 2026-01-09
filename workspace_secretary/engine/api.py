@@ -43,14 +43,18 @@ class EngineState:
     def __init__(self):
         self.config: Optional[ServerConfig] = None
         self.imap_client: Optional[ImapClient] = None
+        self.idle_client: Optional[ImapClient] = None
         self.calendar_client: Optional[CalendarClient] = None
         self.calendar_sync: Optional[CalendarSync] = None
         self.database: Optional[DatabaseInterface] = None
         self.sync_task: Optional[asyncio.Task] = None
+        self.idle_task: Optional[asyncio.Task] = None
         self.enrollment_task: Optional[asyncio.Task] = None
         self.running = False
-        self.enrolled = False  # True when OAuth is valid and clients connected
+        self.enrolled = False
         self.enrollment_error: Optional[str] = None
+        self._sync_debounce_task: Optional[asyncio.Task] = None
+        self._sync_debounce_delay: float = 2.0
 
 
 state = EngineState()
@@ -197,6 +201,15 @@ async def try_enroll() -> bool:
         state.imap_client.connect()
         logger.info("IMAP connected successfully")
 
+        # Create separate IDLE client for push notifications
+        if state.imap_client.has_idle_capability():
+            state.idle_client = ImapClient(
+                state.config.imap,
+                allowed_folders=["INBOX"],
+            )
+            state.idle_client.connect()
+            logger.info("IDLE client connected for push notifications")
+
         # Connect Calendar if enabled
         if state.config.calendar and state.config.calendar.enabled:
             state.calendar_client = CalendarClient(state.config)
@@ -226,6 +239,12 @@ async def try_enroll() -> bool:
             except Exception:
                 pass
             state.imap_client = None
+        if state.idle_client:
+            try:
+                state.idle_client.disconnect()
+            except Exception:
+                pass
+            state.idle_client = None
         state.calendar_client = None
         state.calendar_sync = None
         state.database = None
@@ -339,6 +358,10 @@ async def sync_loop():
     """Background sync loop for email and calendar."""
     sync_interval = int(os.environ.get("SYNC_INTERVAL", "300"))
 
+    # Start IDLE monitor if available
+    if state.idle_client and state.idle_client.has_idle_capability():
+        state.idle_task = asyncio.create_task(idle_monitor())
+
     while state.running:
         try:
             # Email sync
@@ -364,77 +387,123 @@ async def sync_loop():
 
 def _email_to_db_params(email_obj: "Email", folder: str) -> dict[str, Any]:
     """Convert Email dataclass to database upsert parameters."""
+    date_str = email_obj.date.isoformat() if email_obj.date else None
+    internal_date_str = (
+        email_obj.internal_date.isoformat() if email_obj.internal_date else None
+    )
+    gmail_thread_id = (
+        int(email_obj.gmail_thread_id) if email_obj.gmail_thread_id else None
+    )
+
     return {
         "uid": email_obj.uid or 0,
         "folder": folder,
         "message_id": email_obj.message_id,
         "subject": email_obj.subject,
         "from_addr": str(email_obj.from_),
-        "to_addr": [str(addr) for addr in email_obj.to],
-        "cc_addr": [str(addr) for addr in email_obj.cc],
-        "date": email_obj.date,
-        "body_text": email_obj.content.text,
-        "body_html": email_obj.content.html,
-        "flags": email_obj.flags,
+        "to_addr": ",".join(str(addr) for addr in email_obj.to),
+        "cc_addr": ",".join(str(addr) for addr in email_obj.cc),
+        "bcc_addr": "",
+        "date": date_str,
+        "internal_date": internal_date_str,
+        "body_text": email_obj.content.text or "",
+        "body_html": email_obj.content.html or "",
+        "flags": ",".join(email_obj.flags),
         "is_unread": "\\Seen" not in email_obj.flags,
         "is_important": "\\Flagged" in email_obj.flags,
-        "size": 0,  # Not available from IMAP fetch
-        "in_reply_to": email_obj.in_reply_to,
+        "size": email_obj.size,
+        "modseq": email_obj.modseq,
+        "in_reply_to": email_obj.in_reply_to or "",
         "references_header": " ".join(email_obj.references)
         if email_obj.references
-        else None,
+        else "",
+        "gmail_thread_id": gmail_thread_id,
+        "gmail_msgid": email_obj.gmail_msgid,
+        "gmail_labels": email_obj.gmail_labels,
+        "has_attachments": email_obj.has_attachments,
+        "attachment_filenames": email_obj.attachment_filenames,
     }
 
 
 async def sync_emails():
-    """Sync emails from IMAP to database."""
+    """Sync emails from IMAP to database using CONDSTORE when available."""
     if not state.database or not state.imap_client:
         return
 
-    # Get allowed folders from config, default to INBOX
     folders = ["INBOX"]
     if state.config and state.config.allowed_folders:
         folders = state.config.allowed_folders
 
+    has_condstore = state.imap_client.has_condstore_capability()
+
     for folder in folders:
         try:
-            # Get folder state for incremental sync
             folder_state = state.database.get_folder_state(folder)
-            last_uid = folder_state.get("uidnext", 1) if folder_state else 1
+            folder_info = state.imap_client.select_folder(folder, readonly=True)
 
-            # Search for emails with UID > last_uid
-            # Use uid_range criteria to get new emails
-            uids = state.imap_client.search(
-                {"uid_range": (last_uid, "*")},
-                folder=folder,
+            current_uidvalidity = folder_info.get("uidvalidity", 0)
+            current_highestmodseq = folder_info.get("highestmodseq", 0)
+
+            stored_uidvalidity = (
+                folder_state.get("uidvalidity", 0) if folder_state else 0
             )
+            stored_highestmodseq = (
+                folder_state.get("highestmodseq", 0) if folder_state else 0
+            )
+            stored_uidnext = folder_state.get("uidnext", 1) if folder_state else 1
 
-            if not uids:
+            if stored_uidvalidity != current_uidvalidity and stored_uidvalidity != 0:
+                logger.warning(f"UIDVALIDITY changed for {folder}, clearing cache")
+                state.database.clear_folder(folder)
+                stored_uidnext = 1
+                stored_highestmodseq = 0
+
+            if (
+                has_condstore
+                and stored_highestmodseq > 0
+                and current_highestmodseq == stored_highestmodseq
+            ):
+                logger.debug(f"HIGHESTMODSEQ unchanged for {folder}, skipping sync")
                 continue
 
-            # Fetch the emails
-            emails = state.imap_client.fetch_emails(uids, folder, limit=500)
-
-            max_uid = last_uid
-            for uid, email_obj in emails.items():
-                # Convert Email dataclass to db params and upsert
-                params = _email_to_db_params(email_obj, folder)
-                state.database.upsert_email(**params)
-                if uid > max_uid:
-                    max_uid = uid
-
-            # Update folder state with new uidnext
-            if max_uid >= last_uid:
-                # Get folder info for uidvalidity
-                folder_info = state.imap_client.select_folder(folder, readonly=True)
-                uidvalidity = folder_info.get(b"UIDVALIDITY", 0)
-                state.database.save_folder_state(
-                    folder=folder,
-                    uidvalidity=uidvalidity,
-                    uidnext=max_uid + 1,
+            if has_condstore and stored_highestmodseq > 0:
+                changed = state.imap_client.fetch_changed_since(
+                    folder, stored_highestmodseq
+                )
+                for uid, data in changed.items():
+                    state.database.update_email_flags(
+                        uid=uid,
+                        folder=folder,
+                        flags=",".join(data["flags"]),
+                        is_unread="\\Seen" not in data["flags"],
+                        modseq=data["modseq"],
+                        gmail_labels=data.get("gmail_labels"),
+                    )
+                logger.debug(
+                    f"CONDSTORE: updated flags for {len(changed)} emails in {folder}"
                 )
 
-            logger.debug(f"Synced {len(emails)} emails from {folder}")
+            uids = state.imap_client.search(f"UID {stored_uidnext}:*", folder=folder)
+            new_uids = [uid for uid in uids if uid >= stored_uidnext]
+
+            if new_uids:
+                emails = state.imap_client.fetch_emails(new_uids, folder, limit=500)
+                max_uid = stored_uidnext
+                for uid, email_obj in emails.items():
+                    params = _email_to_db_params(email_obj, folder)
+                    state.database.upsert_email(**params)
+                    if uid > max_uid:
+                        max_uid = uid
+                logger.debug(f"Synced {len(emails)} new emails from {folder}")
+            else:
+                max_uid = stored_uidnext
+
+            state.database.save_folder_state(
+                folder=folder,
+                uidvalidity=current_uidvalidity,
+                uidnext=max_uid + 1 if new_uids else stored_uidnext,
+                highestmodseq=current_highestmodseq,
+            )
 
         except Exception as e:
             logger.error(f"Error syncing folder {folder}: {e}")
@@ -506,6 +575,65 @@ async def generate_embeddings():
 
     except Exception as e:
         logger.error(f"Embedding generation error: {e}")
+
+
+async def idle_monitor():
+    """Background task that uses IMAP IDLE for push-based sync notifications.
+
+    Monitors INBOX for changes and triggers sync when new mail arrives.
+    Uses a dedicated IMAP connection separate from the main sync client.
+    """
+    if not state.config or not state.idle_client:
+        return
+
+    if not state.idle_client.has_idle_capability():
+        logger.info("Server does not support IDLE, skipping idle monitor")
+        return
+
+    logger.info("Starting IDLE monitor for push notifications")
+    idle_timeout = 25 * 60  # 25 minutes (Gmail requires re-IDLE every 29 min)
+
+    while state.running and state.enrolled:
+        try:
+            state.idle_client.select_folder("INBOX", readonly=True)
+            state.idle_client.idle_start()
+
+            try:
+                responses = state.idle_client.idle_check(timeout=idle_timeout)
+                if responses:
+                    for response in responses:
+                        if len(response) >= 2 and response[1] in (
+                            b"EXISTS",
+                            b"EXPUNGE",
+                        ):
+                            logger.debug(f"IDLE notification: {response}")
+                            await debounced_sync()
+                            break
+            finally:
+                state.idle_client.idle_done()
+
+        except Exception as e:
+            logger.error(f"IDLE monitor error: {e}")
+            await asyncio.sleep(30)
+
+
+async def debounced_sync():
+    """Trigger a sync with debouncing to batch rapid changes.
+
+    If called multiple times within the debounce window, only one sync runs.
+    """
+    if state._sync_debounce_task and not state._sync_debounce_task.done():
+        state._sync_debounce_task.cancel()
+        try:
+            await state._sync_debounce_task
+        except asyncio.CancelledError:
+            pass
+
+    async def _delayed_sync():
+        await asyncio.sleep(state._sync_debounce_delay)
+        await sync_emails()
+
+    state._sync_debounce_task = asyncio.create_task(_delayed_sync())
 
 
 app = FastAPI(title="Secretary Engine", lifespan=lifespan)
@@ -581,6 +709,7 @@ async def move_email(req: EmailMoveRequest):
         if state.database:
             # Delete from old location, will be re-synced in new location
             state.database.delete_email(req.uid, req.folder)
+        await debounced_sync()
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -646,6 +775,7 @@ async def modify_labels(req: EmailLabelsRequest):
             state.imap_client.set_gmail_labels(req.uid, req.folder, req.labels)
         else:
             return {"status": "error", "message": f"Invalid action: {req.action}"}
+        await debounced_sync()
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -709,6 +839,7 @@ async def send_email(req: SendEmailRequest):
                 .execute()
             )
 
+            await debounced_sync()
             return {"status": "ok", "message_id": result.get("id")}
 
         else:

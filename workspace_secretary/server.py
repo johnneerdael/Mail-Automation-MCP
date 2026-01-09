@@ -109,7 +109,7 @@ def create_server(
 
     server = FastMCP(
         "Secretary",
-        instructions="Google Workspace Secretary - Email and Calendar MCP",
+        instructions="Gmail Secretary - Email and Calendar MCP",
         lifespan=server_lifespan,
         host=host,
         port=port,

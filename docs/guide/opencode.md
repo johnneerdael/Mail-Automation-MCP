@@ -1,6 +1,6 @@
 # OpenCode Agent Setup Guide
 
-This document provides a complete, copy/paste-ready guide for setting up the **Google Workspace Secretary MCP** agent ecosystem in OpenCode.
+This document provides a complete, copy/paste-ready guide for setting up the **Gmail Secretary MCP** agent ecosystem in OpenCode.
 
 ## Table of Contents
 1. [Project Structure](#project-structure)

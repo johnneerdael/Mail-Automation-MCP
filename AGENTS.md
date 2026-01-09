@@ -1,4 +1,4 @@
-# Agent Rules for Google Workspace Secretary
+# Agent Rules for Gmail Secretary
 
 This document defines **hard rules** that all agents in this project MUST follow. These rules enforce safety, respect user preferences, and maintain the integrity of the intelligent secretary system.
 

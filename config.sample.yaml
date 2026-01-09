@@ -1,4 +1,4 @@
-# Google Workspace Secretary MCP Configuration
+# Gmail Secretary MCP Configuration
 # Complete example with all available options
 #
 # IMPORTANT: This file is mounted READ-ONLY in Docker.

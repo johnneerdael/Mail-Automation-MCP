@@ -4,6 +4,7 @@ import email
 import logging
 import re
 from datetime import datetime, timedelta
+from email.message import Message
 from typing import Dict, List, Optional, Tuple, Union, Any, cast
 
 import imapclient
@@ -75,6 +76,15 @@ class ImapClient:
 
             self.connected = True
             logger.info(f"Connected to IMAP server {self.config.host}")
+
+            capabilities = self.get_capabilities()
+            if "CONDSTORE" in capabilities:
+                try:
+                    self.client.enable("CONDSTORE")
+                    logger.info("CONDSTORE enabled")
+                except Exception as e:
+                    logger.warning(f"Failed to enable CONDSTORE: {e}")
+
         except Exception as e:
             self.connected = False
             logger.error(f"Failed to connect to IMAP server: {e}")
@@ -238,7 +248,7 @@ class ImapClient:
         # If allowed_folders is specified, check if folder is in it
         return folder in self.allowed_folders
 
-    def select_folder(self, folder: str, readonly: bool = False) -> Dict[Any, Any]:
+    def select_folder(self, folder: str, readonly: bool = False) -> Dict[str, Any]:
         """Select folder on IMAP server.
 
         Args:
@@ -246,13 +256,17 @@ class ImapClient:
             readonly: If True, select folder in read-only mode
 
         Returns:
-            Dictionary with folder information
+            Dictionary with folder information including:
+            - exists: Number of messages
+            - recent: Number of recent messages
+            - uidvalidity: UIDVALIDITY value
+            - uidnext: Next UID value
+            - highestmodseq: Highest modification sequence (if CONDSTORE enabled)
 
         Raises:
             ValueError: If folder is not allowed
             ConnectionError: If connection error occurs
         """
-        # Make sure the folder is allowed
         if not self._is_folder_allowed(folder):
             raise ValueError(f"Folder '{folder}' is not allowed")
 
@@ -261,7 +275,17 @@ class ImapClient:
             result = client.select_folder(folder, readonly=readonly)
             self.current_folder = folder
             logger.debug(f"Selected folder '{folder}'")
-            return cast(Dict[Any, Any], result)
+
+            folder_info: Dict[str, Any] = {
+                "exists": result.get(b"EXISTS", 0),
+                "recent": result.get(b"RECENT", 0),
+                "uidvalidity": result.get(b"UIDVALIDITY"),
+                "uidnext": result.get(b"UIDNEXT"),
+                "highestmodseq": result.get(b"HIGHESTMODSEQ", 0),
+                "flags": result.get(b"FLAGS", []),
+                "permanentflags": result.get(b"PERMANENTFLAGS", []),
+            }
+            return folder_info
         except imapclient.IMAPClient.Error as e:
             logger.error(f"Error selecting folder {folder}: {e}")
             raise ConnectionError(f"Failed to select folder {folder}: {e}")
@@ -413,33 +437,31 @@ class ImapClient:
         client = self._get_client()
         self.select_folder(folder, readonly=True)
 
-        # Apply limit if specified
         if limit is not None and limit > 0:
             uids = uids[:limit]
 
-        # Fetch message data
         if not uids:
             return {}
 
-        # Fetch messages with full metadata including Gmail extensions if supported
-        fetch_attributes = ["BODY.PEEK[]", "FLAGS"]
+        fetch_attributes = ["BODY.PEEK[]", "FLAGS", "INTERNALDATE", "RFC822.SIZE"]
 
-        # Add Gmail-specific attributes if we're on Gmail
         capabilities = self.get_capabilities()
         is_gmail = "X-GM-EXT-1" in capabilities
-        if is_gmail:
-            fetch_attributes.extend(["X-GM-THRID", "X-GM-LABELS"])
+        has_condstore = "CONDSTORE" in capabilities
 
-        # Cast results to Any to avoid "Envelope is not iterable" errors from imapclient's poor typing
+        if has_condstore:
+            fetch_attributes.append("MODSEQ")
+
+        if is_gmail:
+            fetch_attributes.extend(["X-GM-THRID", "X-GM-LABELS", "X-GM-MSGID"])
+
         from typing import Any
 
         result = client.fetch(uids, fetch_attributes)
         typed_result: Any = result
 
-        # Parse emails
         emails = {}
         for uid, message_data in typed_result.items():
-            # Handle potential None or missing keys safely
             raw_message = message_data.get(b"BODY[]") or message_data.get(
                 b"BODY.PEEK[]"
             )
@@ -449,15 +471,15 @@ class ImapClient:
                 logger.warning(f"No body found for message {uid}")
                 continue
 
-            # Gmail extensions
             gmail_thread_id = None
             gmail_labels = None
+            gmail_msgid = None
             if is_gmail:
                 gmail_thread_id_raw = message_data.get(b"X-GM-THRID")
                 if isinstance(gmail_thread_id_raw, bytes):
-                    gmail_thread_id = gmail_thread_id_raw.decode("utf-8")
+                    gmail_thread_id = int(gmail_thread_id_raw.decode("utf-8"))
                 elif gmail_thread_id_raw is not None:
-                    gmail_thread_id = str(gmail_thread_id_raw)
+                    gmail_thread_id = int(gmail_thread_id_raw)
 
                 gmail_labels_raw = message_data.get(b"X-GM-LABELS")
                 if gmail_labels_raw and isinstance(gmail_labels_raw, (list, tuple)):
@@ -468,31 +490,74 @@ class ImapClient:
                         for label in gmail_labels_raw
                     ]
 
-            # Convert flags to strings
+                gmail_msgid_raw = message_data.get(b"X-GM-MSGID")
+                if gmail_msgid_raw is not None:
+                    gmail_msgid = int(gmail_msgid_raw)
+
+            modseq = 0
+            if has_condstore:
+                modseq_raw = message_data.get(b"MODSEQ")
+                if modseq_raw and isinstance(modseq_raw, tuple) and len(modseq_raw) > 0:
+                    modseq = int(modseq_raw[0])
+
+            internal_date = message_data.get(b"INTERNALDATE")
+            size = message_data.get(b"RFC822.SIZE", 0)
+
             str_flags = []
             if flags and isinstance(flags, (list, tuple)):
                 str_flags = [
                     f.decode("utf-8") if isinstance(f, bytes) else str(f) for f in flags
                 ]
 
-            # Parse email
             if not isinstance(raw_message, bytes):
                 logger.warning(f"Message data for {uid} is not bytes")
                 continue
 
             message = email.message_from_bytes(raw_message)
+
+            has_attachments, attachment_filenames = self._extract_attachment_info(
+                message
+            )
+
             email_obj = Email.from_message(
                 message,
                 uid=uid,
                 folder=folder,
-                gmail_thread_id=gmail_thread_id,
+                gmail_thread_id=str(gmail_thread_id) if gmail_thread_id else None,
                 gmail_labels=gmail_labels,
             )
             email_obj.flags = str_flags
+            email_obj.modseq = modseq
+            email_obj.gmail_msgid = gmail_msgid
+            email_obj.internal_date = internal_date
+            email_obj.size = size
+            email_obj.has_attachments = has_attachments
+            email_obj.attachment_filenames = attachment_filenames
 
             emails[uid] = email_obj
 
         return emails
+
+    def _extract_attachment_info(self, message: Message) -> Tuple[bool, List[str]]:
+        """Extract attachment information from a MIME message."""
+        has_attachments = False
+        attachment_filenames: List[str] = []
+
+        if message.is_multipart():
+            for part in message.walk():
+                content_disposition = part.get("Content-Disposition", "")
+                if "attachment" in content_disposition.lower():
+                    has_attachments = True
+                    filename = part.get_filename()
+                    if filename:
+                        attachment_filenames.append(filename)
+                elif part.get_content_maintype() not in ("text", "multipart"):
+                    has_attachments = True
+                    filename = part.get_filename()
+                    if filename:
+                        attachment_filenames.append(filename)
+
+        return has_attachments, attachment_filenames
 
     def fetch_thread(self, uid: int, folder: str = "INBOX") -> List[Email]:
         """Fetch all emails in a thread.
@@ -833,6 +898,21 @@ class ImapClient:
         """Check if server supports THREAD extension (RFC 5256)."""
         capabilities = self.get_capabilities()
         return f"THREAD={algorithm.upper()}" in capabilities
+
+    def has_condstore_capability(self) -> bool:
+        """Check if server supports CONDSTORE extension (RFC 7162)."""
+        capabilities = self.get_capabilities()
+        return "CONDSTORE" in capabilities
+
+    def has_idle_capability(self) -> bool:
+        """Check if server supports IDLE extension (RFC 2177)."""
+        capabilities = self.get_capabilities()
+        return "IDLE" in capabilities
+
+    def _has_gmail_extensions(self) -> bool:
+        """Check if server supports Gmail IMAP extensions."""
+        capabilities = self.get_capabilities()
+        return "X-GM-EXT-1" in capabilities
 
     def sort(
         self,
@@ -1233,6 +1313,160 @@ class ImapClient:
         # Fallback to INBOX if no drafts folder found
         logger.warning("No drafts folder found, using INBOX as fallback")
         return "INBOX"
+
+    def fetch_changed_since(
+        self, folder: str, modseq: int
+    ) -> Dict[int, Dict[str, Any]]:
+        """Fetch only messages changed since given modseq (CONDSTORE).
+
+        This is used for efficient incremental sync - only fetches flags and labels
+        for messages that have changed since the last sync.
+
+        Args:
+            folder: Folder to fetch from
+            modseq: The HIGHESTMODSEQ from the last sync
+
+        Returns:
+            Dictionary mapping UIDs to their current state:
+            - flags: List of flags
+            - modseq: Current modification sequence
+            - gmail_labels: List of Gmail labels (if available)
+
+        Raises:
+            ConnectionError: If not connected
+            ValueError: If CONDSTORE not supported
+        """
+        if not self.has_condstore_capability():
+            raise ValueError("Server does not support CONDSTORE")
+
+        client = self._get_client()
+        self.select_folder(folder, readonly=True)
+
+        fetch_attrs = ["FLAGS", "MODSEQ"]
+        if self._has_gmail_extensions():
+            fetch_attrs.append("X-GM-LABELS")
+
+        try:
+            # Use CHANGEDSINCE modifier for efficient sync
+            result = client.fetch(
+                "1:*", fetch_attrs, modifiers=[f"CHANGEDSINCE {modseq}"]
+            )
+
+            changed: Dict[int, Dict[str, Any]] = {}
+            for uid, data in result.items():
+                flags_raw = data.get(b"FLAGS", [])
+                flags = [
+                    f.decode("utf-8") if isinstance(f, bytes) else str(f)
+                    for f in flags_raw
+                ]
+
+                msg_modseq = 0
+                modseq_raw = data.get(b"MODSEQ")
+                if modseq_raw and isinstance(modseq_raw, tuple) and len(modseq_raw) > 0:
+                    msg_modseq = int(modseq_raw[0])
+
+                gmail_labels = None
+                if self._has_gmail_extensions():
+                    labels_raw = data.get(b"X-GM-LABELS")
+                    if labels_raw and isinstance(labels_raw, (list, tuple)):
+                        gmail_labels = [
+                            label.decode("utf-8")
+                            if isinstance(label, bytes)
+                            else str(label)
+                            for label in labels_raw
+                        ]
+
+                changed[uid] = {
+                    "flags": flags,
+                    "modseq": msg_modseq,
+                    "gmail_labels": gmail_labels,
+                }
+
+            logger.debug(
+                f"CHANGEDSINCE {modseq} returned {len(changed)} changed messages"
+            )
+            return changed
+        except Exception as e:
+            logger.error(f"fetch_changed_since failed: {e}")
+            raise
+
+    def idle_start(self) -> None:
+        """Start IDLE mode for push-based notifications.
+
+        After calling this, use idle_check() to wait for notifications,
+        then idle_done() to exit IDLE mode before issuing other commands.
+
+        Raises:
+            ConnectionError: If not connected
+            ValueError: If IDLE not supported
+        """
+        if not self.has_idle_capability():
+            raise ValueError("Server does not support IDLE")
+
+        client = self._get_client()
+        client.idle()
+        logger.debug("IDLE mode started")
+
+    def idle_check(self, timeout: float = 30.0) -> List[Tuple[Any, ...]]:
+        """Wait for IDLE notifications.
+
+        Must be called after idle_start(). Returns when the server sends
+        notifications or when the timeout expires.
+
+        Args:
+            timeout: Maximum seconds to wait for notifications
+
+        Returns:
+            List of server responses (e.g., EXISTS, EXPUNGE notifications)
+        """
+        client = self._get_client()
+        responses = client.idle_check(timeout=timeout)
+        logger.debug(f"IDLE check returned {len(responses)} responses")
+        return responses
+
+    def idle_done(self) -> None:
+        """Exit IDLE mode.
+
+        Must be called after idle_start() before issuing any other IMAP commands.
+        """
+        client = self._get_client()
+        client.idle_done()
+        logger.debug("IDLE mode ended")
+
+    def gmail_raw_search(self, query: str, folder: str = "INBOX") -> List[int]:
+        """Search using Gmail's X-GM-RAW query syntax.
+
+        This is an internal method for targeted sync optimization, not exposed
+        as an MCP tool. Uses Gmail's powerful search syntax including:
+        - from:, to:, subject:, has:attachment
+        - before:, after:, newer_than:, older_than:
+        - is:unread, is:starred, is:important
+        - label:, category:, in:
+
+        Args:
+            query: Gmail search query (same syntax as Gmail web interface)
+            folder: Folder to search in
+
+        Returns:
+            List of message UIDs matching the query
+
+        Raises:
+            ValueError: If Gmail extensions not supported
+        """
+        if not self._has_gmail_extensions():
+            raise ValueError("Gmail extensions not supported by server")
+
+        client = self._get_client()
+        self.select_folder(folder, readonly=True)
+
+        try:
+            # X-GM-RAW allows Gmail's native search syntax
+            results = client.search(["X-GM-RAW", f'"{query}"'])
+            logger.debug(f"X-GM-RAW search '{query}' returned {len(results)} results")
+            return list(results)
+        except Exception as e:
+            logger.error(f"gmail_raw_search failed: {e}")
+            raise
 
     def save_draft_mime(self, message: Any) -> Optional[int]:
         """Save a MIME message as a draft.

@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-01-09
+
+### Added
+
+- **CONDSTORE Support (RFC 7162)**: Efficient incremental sync using HIGHESTMODSEQ
+  - Skip sync entirely when mailbox unchanged (HIGHESTMODSEQ comparison)
+  - `fetch_changed_since()` for flag-only updates via CHANGEDSINCE modifier
+  - Dramatically reduces sync overhead for active mailboxes
+- **IMAP IDLE Support (RFC 2177)**: Push-based sync notifications
+  - Dedicated IDLE connection monitors INBOX for changes
+  - `idle_monitor()` background task triggers immediate sync on new mail
+  - No more waiting for 5-minute poll interval
+- **Gmail Extensions**: Native Gmail protocol support
+  - `X-GM-MSGID` and `X-GM-THRID` for message/thread identification
+  - `X-GM-LABELS` stored in database (JSONB for PostgreSQL, comma-separated for SQLite)
+  - `gmail_raw_search()` internal method for targeted sync optimization
+- **Enhanced Email Metadata**:
+  - `internal_date` (INTERNALDATE) - server receipt timestamp
+  - `size` (RFC822.SIZE) - message size in bytes
+  - `modseq` - modification sequence for CONDSTORE
+  - `has_attachments` and `attachment_filenames` - extracted from MIME structure
+- **Debounced Sync**: Mutations (move, labels, send) trigger 2-second debounced sync
+  - Batches rapid changes into single sync operation
+  - Immediate feedback without overwhelming the server
+
+### Changed
+
+- **Database Schema**: New columns for Gmail-native features
+  - Added: `gmail_thread_id`, `gmail_msgid`, `gmail_labels`, `bcc_addr`, `internal_date`, `has_attachments`, `attachment_filenames`
+  - Removed: Legacy `thread_root_uid`, `thread_parent_uid`, `thread_depth` (replaced by `gmail_thread_id`)
+  - New `update_email_flags()` method for CONDSTORE flag-only updates
+  - `save_folder_state()` now stores `highestmodseq`
+- **Sync Engine Rewrite**: CONDSTORE-first with graceful fallback
+  - Checks HIGHESTMODSEQ before any fetch operations
+  - Uses CHANGEDSINCE for incremental flag sync
+  - Falls back to UID-based sync if CONDSTORE unavailable
+- **EngineState**: Added `idle_client`, `idle_task`, `_sync_debounce_task` for IDLE support
+
+### Performance
+
+- **Unchanged mailbox**: Skip sync entirely (was: fetch all UIDs, compare)
+- **Flag changes only**: Fetch only changed flags (was: re-fetch entire message)
+- **New mail detection**: Instant via IDLE (was: 5-minute poll interval)
+- **Batch mutations**: Single sync after multiple rapid changes (was: sync per mutation)
+
 ## [4.0.0] - 2026-01-09
 
 ### ⚠️ BREAKING: Complete Architecture Rewrite
