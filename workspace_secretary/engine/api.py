@@ -124,11 +124,11 @@ async def try_enroll() -> bool:
     """
     from workspace_secretary.engine.oauth2 import validate_oauth_config
 
-    config_path = os.environ.get("CONFIG_PATH", "config.yaml")
+    config_path = os.environ.get("CONFIG_PATH")
     token_path = Path(os.environ.get("TOKEN_PATH", "config/token.json"))
 
     try:
-        # Load main config
+        # Load main config (uses search paths if config_path is None)
         state.config = load_config(config_path)
 
         # If token.json exists separately, merge OAuth2 tokens from it
@@ -257,7 +257,24 @@ async def enrollment_watch_loop():
     Monitors config/token files for changes and attempts enrollment.
     """
     token_path = Path(os.environ.get("TOKEN_PATH", "config/token.json"))
-    config_path = Path(os.environ.get("CONFIG_PATH", "config.yaml"))
+    config_path_env = os.environ.get("CONFIG_PATH")
+
+    # Find actual config path using same search logic as load_config
+    config_path: Optional[Path] = None
+    if config_path_env:
+        config_path = Path(config_path_env)
+    else:
+        search_paths = [
+            Path("/app/config/config.yaml"),
+            Path("config/config.yaml"),
+            Path("config.yaml"),
+            Path.home() / ".config/workspace-secretary/config.yaml",
+            Path("/etc/workspace-secretary/config.yaml"),
+        ]
+        for p in search_paths:
+            if p.exists():
+                config_path = p
+                break
 
     last_token_mtime = 0.0
     last_config_mtime = 0.0
@@ -278,7 +295,7 @@ async def enrollment_watch_loop():
                     last_token_mtime = current_mtime
                     logger.info("Detected token.json change")
 
-            if config_path.exists():
+            if config_path and config_path.exists():
                 current_mtime = config_path.stat().st_mtime
                 if current_mtime > last_config_mtime:
                     config_changed = True
@@ -295,7 +312,7 @@ async def enrollment_watch_loop():
                     # First run - record current mtimes
                     if token_path.exists():
                         last_token_mtime = token_path.stat().st_mtime
-                    if config_path.exists():
+                    if config_path and config_path.exists():
                         last_config_mtime = config_path.stat().st_mtime
 
                 if await try_enroll():
