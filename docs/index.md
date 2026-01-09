@@ -57,7 +57,7 @@ services:
       - "8000:8000"
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
-      - ./token.json:/app/token.json
+      - ./token.json:/app/config/token.json
       - ./data:/app/data
     environment:
       - LOG_LEVEL=INFO

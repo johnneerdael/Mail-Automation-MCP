@@ -2,13 +2,15 @@ services:
   workspace-secretary:
     image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
     container_name: workspace-secretary
-    restart: always
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
-      - ./token.json:/app/token.json
-      - ./data:/app/data
+      - ./config:/app/config
+      - ./token.json:/app/config/token.json:rw
     environment:
       - LOG_LEVEL=INFO
-      - MCP_ARGS=--config /app/config/config.yaml --transport http --host 0.0.0.0 --port 8000
+    command: ["--config", "/app/config/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    stdin_open: true
+    tty: true

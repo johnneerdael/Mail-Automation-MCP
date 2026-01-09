@@ -472,7 +472,10 @@ def load_config(config_path: Optional[str] = None) -> ServerConfig:
         ValueError: If configuration is invalid
     """
     # Default locations to check for config file
+    # Container paths first (Docker), then local dev paths
     default_locations = [
+        Path("/app/config/config.yaml"),
+        Path("/app/config/config.yml"),
         Path("config.yaml"),
         Path("config.yml"),
         Path("~/.config/workspace-secretary/config.yaml"),

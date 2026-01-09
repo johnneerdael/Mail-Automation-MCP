@@ -117,8 +117,8 @@ class OAuth2Config:
                 "installed": {
                     "client_id": self._client_id,
                     "client_secret": self._client_secret,
-                    "redirect_uris": ["http://localhost", "urn:ietf:wg:oauth:2.0:oob"],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "redirect_uris": ["http://localhost"],
+                    "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
                 }
             }

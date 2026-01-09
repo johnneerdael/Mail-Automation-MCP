@@ -378,10 +378,11 @@ uv run python -m workspace_secretary.auth_setup \
   --token-output token.json
 
 # Docker
-docker exec -it workspace-secretary \
-  python -m workspace_secretary.auth_setup \
-  --config /app/config.yaml \
-  --token-output /app/token.json
+ docker exec -it workspace-secretary \
+   python -m workspace_secretary.auth_setup \
+   --config /app/config/config.yaml \
+   --token-output /app/config/token.json
+
 ```
 
 ### "aliases" Field Missing

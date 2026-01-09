@@ -95,8 +95,8 @@ Mount your `token.json` into the container:
 
 ```yaml
 volumes:
-  - ./config.yaml:/app/config.yaml:ro
-  - ./token.json:/app/token.json
+  - ./config.yaml:/app/config/config.yaml:ro
+  - ./token.json:/app/config/token.json
   - ./config:/app/config
 ```
 
@@ -108,8 +108,8 @@ When running in Docker:
 # Run auth setup inside container
 docker exec -it workspace-secretary \
   python -m workspace_secretary.auth_setup \
-  --config /app/config.yaml \
-  --token-output /app/token.json \
+  --config /app/config/config.yaml \
+  --token-output /app/config/token.json \
   --client-id "406964657835-aq8lmia8j95dhl1a2bvharmfk3t1hgqj.apps.googleusercontent.com" \
   --client-secret "kSmqreRr0qwBWJgbf5Y-PjSU"
 ```

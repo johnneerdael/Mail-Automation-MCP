@@ -60,13 +60,13 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./token.json:/app/token.json
+      - ./config.yaml:/app/config/config.yaml:ro
+      - ./token.json:/app/config/token.json
       - ./config:/app/config
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["--config", "/app/config/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
   postgres_data:

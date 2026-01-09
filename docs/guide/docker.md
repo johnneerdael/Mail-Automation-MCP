@@ -88,28 +88,29 @@ The container requires specific volume mounts:
 
 | Host Path | Container Path | Mode | Purpose |
 |-----------|----------------|------|---------|
-| `./config.yaml` | `/app/config.yaml` | `:ro` | Configuration (read-only) |
-| `./token.json` | `/app/token.json` | (rw) | OAuth tokens (read-write) |
-| `./config/` | `/app/config/` | (rw) | SQLite cache storage |
+| `./config.yaml` | `/app/config/config.yaml` | `:ro` | Configuration (read-only) |
+| `./config/` | `/app/config/` | (rw) | SQLite cache + token storage |
+| `./token.json` | `/app/config/token.json` | `:rw` | OAuth tokens (read-write) |
 
 ::: warning Critical: Correct Mount Pattern
 ```yaml
-# ✅ Correct - config read-only, token read-write
+# ✅ Correct - config read-only, token read-write, all in /app/config
 volumes:
-  - ./config.yaml:/app/config.yaml:ro
-  - ./token.json:/app/token.json
+  - ./config.yaml:/app/config/config.yaml:ro
   - ./config:/app/config
+  - ./token.json:/app/config/token.json:rw
 
-# ❌ Wrong - old pattern, config overwrites possible
+# ❌ Wrong - paths don't match container expectations
 volumes:
-  - ./config:/app/config  # Token inside config dir
+  - ./config.yaml:/app/config.yaml:ro  # Wrong: should be /app/config/config.yaml
+  - ./token.json:/app/token.json       # Wrong: should be /app/config/token.json
 ```
 :::
 
-**Why separate token.json?**
+**Why this structure?**
 - `config.yaml` is read-only (`:ro`) for security
 - `token.json` must be read-write for OAuth token refresh
-- Prevents accidental config overwrites during token updates
+- Everything under `/app/config/` keeps paths consistent
 
 ## Email Cache Behavior
 
@@ -161,8 +162,8 @@ If you didn't run OAuth setup locally, run it inside the container:
 ```bash
 docker exec -it workspace-secretary \
   python -m workspace_secretary.auth_setup \
-  --config /app/config.yaml \
-  --token-output /app/token.json
+  --config /app/config/config.yaml \
+  --token-output /app/config/token.json
 ```
 
 The `--manual` flag is default: paste the redirect URL rather than needing localhost access.
@@ -175,8 +176,8 @@ Tokens auto-refresh. If refresh fails:
 # Re-run auth setup
 docker exec -it workspace-secretary \
   python -m workspace_secretary.auth_setup \
-  --config /app/config.yaml \
-  --token-output /app/token.json
+  --config /app/config/config.yaml \
+  --token-output /app/config/token.json
 
 # Restart container
 docker compose restart

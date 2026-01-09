@@ -27,8 +27,8 @@ services:
     container_name: workspace-secretary
     restart: unless-stopped
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./token.json:/app/token.json
+      - ./config.yaml:/app/config/config.yaml:ro
+      - ./token.json:/app/config/token.json
       - ./config:/app/config
     labels:
       - "traefik.enable=true"
@@ -36,7 +36,7 @@ services:
       - "traefik.http.routers.mcp.entrypoints=websecure"
       - "traefik.http.routers.mcp.tls.certresolver=letsencrypt"
       - "traefik.http.services.mcp.loadbalancer.server.port=8000"
-    command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["--config", "/app/config/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 
 volumes:
   letsencrypt:

@@ -4,16 +4,318 @@ import argparse
 import json
 import logging
 import os
+import secrets
 import sys
+import time
+import webbrowser
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import yaml
-
-from workspace_secretary.browser_auth import load_client_credentials, run_local_server
+from flask import Flask, redirect, request, url_for
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+GMAIL_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GMAIL_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+OAUTH_SCOPES = [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/calendar",
+]
+
+DEFAULT_CALLBACK_PORT = 8080
+DEFAULT_CALLBACK_HOST = "localhost"
+CALLBACK_PATH = "/oauth2callback"
+SUCCESS_PATH = "/success"
+
+auth_tokens: Dict[str, Any] = {
+    "access_token": None,
+    "refresh_token": None,
+    "token_expiry": None,
+}
+
+
+def load_client_credentials(credentials_file: str) -> Tuple[str, str]:
+    """Load client credentials from the downloaded JSON file."""
+    if not credentials_file:
+        raise ValueError("No credentials file specified")
+
+    credentials_path = Path(credentials_file)
+    if not credentials_path.exists():
+        raise FileNotFoundError(f"Credentials file not found: {credentials_file}")
+
+    with open(credentials_path) as f:
+        try:
+            credentials = json.load(f)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"Invalid JSON in credentials file: {credentials_file}. Error: {str(e)}"
+            )
+
+    if "installed" in credentials:
+        client_config = credentials["installed"]
+    elif "web" in credentials:
+        client_config = credentials["web"]
+    else:
+        raise ValueError(f"Invalid credentials format in {credentials_file}")
+
+    client_id = client_config.get("client_id")
+    client_secret = client_config.get("client_secret")
+
+    if not client_id or not client_secret:
+        raise ValueError(f"Missing client_id or client_secret in {credentials_file}")
+
+    return client_id, client_secret
+
+
+def create_oauth_app() -> Flask:
+    """Create the Flask app for OAuth2 callback handling."""
+    app = Flask(__name__)
+
+    @app.route(CALLBACK_PATH)
+    def oauth2callback():
+        code = request.args.get("code")
+        if not code:
+            return "Error: No authorization code received", 400
+
+        client_id = app.config.get("client_id")
+        client_secret = app.config.get("client_secret")
+
+        try:
+            import requests
+
+            token_data = {
+                "code": code,
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": app.config.get("redirect_uri"),
+                "grant_type": "authorization_code",
+            }
+
+            response = requests.post(GMAIL_TOKEN_URL, data=token_data)
+            response.raise_for_status()
+
+            tokens = response.json()
+
+            auth_tokens["access_token"] = tokens.get("access_token")
+            auth_tokens["refresh_token"] = tokens.get("refresh_token")
+            auth_tokens["token_expiry"] = int(time.time()) + tokens.get(
+                "expires_in", 3600
+            )
+
+            logger.info("Successfully obtained OAuth2 tokens")
+
+            return redirect(url_for("success"))
+
+        except Exception as e:
+            logger.error(f"Error exchanging authorization code: {e}")
+            return f"Error: Failed to exchange authorization code: {e}", 500
+
+    @app.route(SUCCESS_PATH)
+    def success():
+        return """
+        <html>
+        <head>
+            <title>Authentication Successful</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    margin: 30px;
+                    max-width: 800px;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                .success {
+                    background-color: #d4edda;
+                    color: #155724;
+                    padding: 15px;
+                    border-radius: 4px;
+                    margin: 20px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Authentication Successful!</h1>
+            <div class="success">
+                <p>You have successfully authenticated with Gmail.</p>
+                <p>You may now close this browser window and return to the application.</p>
+            </div>
+        </body>
+        </html>
+        """
+
+    return app
+
+
+def _run_manual_flow(
+    client_id: str,
+    client_secret: str,
+    redirect_uri: str,
+    auth_url: str,
+) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    """Manual OAuth flow where user pastes the redirect URL."""
+    import requests
+
+    print("\n" + "=" * 60)
+    print("MANUAL AUTHENTICATION MODE")
+    print("=" * 60)
+    print("\n1. Open this URL in your browser:\n")
+    print(auth_url)
+    print("\n2. Complete the authentication in your browser.")
+    print("\n3. You will be redirected to a URL that may not load.")
+    print("   Copy the ENTIRE URL from your browser's address bar.")
+    print(
+        "   It will look like: http://localhost:8080/oauth2callback?code=...&state=..."
+    )
+    print("\n" + "-" * 60)
+
+    redirect_response = input("\nPaste the full redirect URL here: ").strip()
+
+    if not redirect_response:
+        print("Error: No URL provided.")
+        return None, None, None
+
+    try:
+        parsed = urlparse(redirect_response)
+        query_params = parse_qs(parsed.query)
+
+        code = query_params.get("code", [None])[0]
+        if not code:
+            print("Error: No authorization code found in URL.")
+            print("Make sure you copied the entire URL including the ?code=... part.")
+            return None, None, None
+
+        token_data = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+
+        response = requests.post(GMAIL_TOKEN_URL, data=token_data)
+        response.raise_for_status()
+
+        tokens = response.json()
+
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
+        token_expiry = int(time.time()) + tokens.get("expires_in", 3600)
+
+        print("\n✓ Authentication successful!")
+        return access_token, refresh_token, token_expiry
+
+    except Exception as e:
+        logger.error(f"Error in manual OAuth flow: {e}")
+        print(f"\nError: {e}")
+        return None, None, None
+
+
+def _run_server_flow(
+    client_id: str,
+    client_secret: str,
+    redirect_uri: str,
+    auth_url: str,
+    port: int,
+    host: str,
+) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    """Server-based OAuth flow with local callback server."""
+    app = create_oauth_app()
+
+    app.config.update(
+        client_id=client_id,
+        client_secret=client_secret,
+        redirect_uri=redirect_uri,
+    )
+
+    auth_tokens["access_token"] = None
+    auth_tokens["refresh_token"] = None
+    auth_tokens["token_expiry"] = None
+
+    print(f"\nOpening browser for Gmail authentication...")
+    webbrowser.open(auth_url)
+
+    print(f"\nWaiting for authentication at http://{host}:{port}{CALLBACK_PATH}")
+    print(
+        "\nIf the browser doesn't open or callback fails, restart with --manual flag."
+    )
+
+    import threading
+
+    server_should_stop = threading.Event()
+
+    def run_server():
+        from werkzeug.serving import make_server
+
+        server = make_server(host, port, app, threaded=True)
+        server.timeout = 0.5
+
+        while not server_should_stop.is_set():
+            server.handle_request()
+
+    server_thread = threading.Thread(target=run_server)
+    server_thread.daemon = True
+    server_thread.start()
+
+    try:
+        max_wait_time = 5 * 60
+        start_time = time.time()
+
+        while time.time() - start_time < max_wait_time:
+            if auth_tokens["access_token"] is not None:
+                break
+            time.sleep(1)
+
+        if auth_tokens["access_token"] is None:
+            print("\nAuthentication timed out. Please try again.")
+            print(
+                "Tip: If running in Docker or the callback isn't working, use --manual flag."
+            )
+            return None, None, None
+
+    finally:
+        server_should_stop.set()
+        server_thread.join(timeout=5)
+
+    return (
+        auth_tokens["access_token"],
+        auth_tokens["refresh_token"],
+        auth_tokens["token_expiry"],
+    )
+
+
+def run_oauth_flow(
+    client_id: str,
+    client_secret: str,
+    port: int = DEFAULT_CALLBACK_PORT,
+    host: str = DEFAULT_CALLBACK_HOST,
+    manual_mode: bool = False,
+) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+    """Run the OAuth2 flow to obtain tokens."""
+    redirect_uri = f"http://{host}:{port}{CALLBACK_PATH}"
+
+    state = secrets.token_urlsafe(16)
+    auth_params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(OAUTH_SCOPES),
+        "access_type": "offline",
+        "state": state,
+        "prompt": "consent",
+    }
+    auth_url = f"{GMAIL_AUTH_URL}?{urlencode(auth_params)}"
+
+    if manual_mode:
+        return _run_manual_flow(client_id, client_secret, redirect_uri, auth_url)
+    else:
+        return _run_server_flow(
+            client_id, client_secret, redirect_uri, auth_url, port, host
+        )
 
 
 def setup_gmail_oauth2(
@@ -25,17 +327,7 @@ def setup_gmail_oauth2(
     manual_mode: bool = True,
     token_output: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Set up OAuth2 authentication for Gmail.
-
-    Args:
-        client_id: Google API client ID
-        client_secret: Google API client secret
-        config_path: Path to existing config file to update (optional)
-        config_output: Path to save the updated config file (optional)
-
-    Returns:
-        Updated configuration dictionary
-    """
+    """Set up OAuth2 authentication for Gmail."""
     if credentials_file and not (client_id and client_secret):
         try:
             logger.info(f"Loading credentials from {credentials_file}")
@@ -63,7 +355,7 @@ def setup_gmail_oauth2(
         print("Using automatic mode - a browser window will open for authorization.\n")
 
     try:
-        access_token, refresh_token, token_expiry = run_local_server(
+        access_token, refresh_token, token_expiry = run_oauth_flow(
             client_id=client_id,
             client_secret=client_secret,
             manual_mode=manual_mode,
@@ -84,7 +376,7 @@ def setup_gmail_oauth2(
         "token_expiry": token_expiry,
     }
 
-    config_data = {}
+    config_data: Dict[str, Any] = {}
     if config_path:
         config_file = Path(config_path)
         if config_file.exists():
@@ -156,8 +448,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        help="Path to save the updated config file",
-        default="config.yaml",
+        help="Path to save the updated config file (default: don't write config)",
+        default=None,
     )
     parser.add_argument(
         "--token-output",

@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `API_MODE_SCOPES` and API mode code paths
 - `get_oauth_mode_from_context()` helper
 - `get_scopes_for_mode()` function
-- OAuth mode selection in browser_auth.py and gmail_auth.py
+- OAuth mode selection (consolidated into auth_setup.py)
 
 ## [2.1.0] - 2026-01-09
 

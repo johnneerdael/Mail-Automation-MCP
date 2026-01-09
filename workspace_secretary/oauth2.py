@@ -15,8 +15,11 @@ from workspace_secretary.config import OAuth2Config
 logger = logging.getLogger(__name__)
 
 GMAIL_TOKEN_URI = "https://oauth2.googleapis.com/token"
-GMAIL_AUTH_BASE_URL = "https://accounts.google.com/o/oauth2/auth"
-GMAIL_SCOPES = ["https://mail.google.com/"]
+GMAIL_AUTH_BASE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GMAIL_SCOPES = [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/calendar",
+]
 
 
 class OAuthValidationResult:
@@ -135,11 +138,11 @@ def get_authorization_url(oauth2_config: OAuth2Config) -> str:
     """
     params = {
         "client_id": oauth2_config.client_id,
-        "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",  # Desktop app flow
+        "redirect_uri": "http://localhost",
         "response_type": "code",
         "scope": " ".join(GMAIL_SCOPES),
         "access_type": "offline",
-        "prompt": "consent",  # Force to get refresh_token
+        "prompt": "consent",
     }
 
     query_string = "&".join(f"{k}={v}" for k, v in params.items())
@@ -166,7 +169,7 @@ def exchange_code_for_tokens(
         "client_secret": oauth2_config.client_secret,
         "code": code,
         "grant_type": "authorization_code",
-        "redirect_uri": "urn:ietf:wg:oauth:2.0:oob",  # Desktop app flow
+        "redirect_uri": "http://localhost",
     }
 
     response = requests.post(GMAIL_TOKEN_URI, data=data)

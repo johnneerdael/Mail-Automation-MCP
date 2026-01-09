@@ -90,13 +90,13 @@ class ClientManager:
             logger.warning(
                 f"OAuth tokens not ready: {validation.error}. "
                 f"Retrying for {remaining}s... "
-                f"Run 'python -m workspace_secretary.browser_auth' to authenticate."
+                f"Run 'python -m workspace_secretary.auth_setup' to authenticate."
             )
             time.sleep(AUTH_RETRY_INTERVAL)
 
         logger.error(
             f"OAuth authentication timeout after {AUTH_RETRY_TIMEOUT}s. "
-            "Please run 'python -m workspace_secretary.browser_auth' to authenticate."
+            "Please run 'python -m workspace_secretary.auth_setup' to authenticate."
         )
         return False
 
@@ -111,7 +111,7 @@ class ClientManager:
         if not self._wait_for_valid_oauth():
             raise ConnectionError(
                 "OAuth authentication required. "
-                "Run 'python -m workspace_secretary.browser_auth' to authenticate."
+                "Run 'python -m workspace_secretary.auth_setup' to authenticate."
             )
 
         logger.info("Establishing IMAP connection...")

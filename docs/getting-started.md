@@ -105,12 +105,13 @@ services:
     restart: always
     ports:
       - "8000:8000"
-    volumes:
-      - ./config.yaml:/app/config/config.yaml:ro
-      - ./token.json:/app/token.json
-      - ./data:/app/data
-    environment:
-      - LOG_LEVEL=INFO
+     volumes:
+       - ./config.yaml:/app/config/config.yaml:ro
+       - ./token.json:/app/config/token.json
+       - ./data:/app/data
+     environment:
+       - LOG_LEVEL=INFO
+
 ```
 
 ::: tip Single Container, Two Processes
@@ -124,98 +125,67 @@ Create an empty token.json first:
 touch token.json
 ```
 
-Run authentication (manual flow is default):
+**Option 1: Docker (Recommended)**
 
 ```bash
 # With credentials.json from Google Cloud Console
-uv run python -m workspace_secretary.auth_setup \
-  --credentials-file credentials.json \
-  --config config.yaml \
-  --token-output token.json
-
-# Or with client ID/secret directly
-uv run python -m workspace_secretary.auth_setup \
-  --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
-  --client-secret "YOUR_CLIENT_SECRET" \
-  --config config.yaml \
-  --token-output token.json
-```
-
-**Manual OAuth Flow:**
-1. Open the printed authorization URL in your browser
-2. Login and approve access
-3. Copy the **full redirect URL** from your browser (even if page doesn't load)
-4. Paste when prompted
-5. Tokens saved to `token.json`
-
-**Auth Setup Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--credentials-file` | Google OAuth credentials JSON |
-| `--client-id` | Client ID (alternative to credentials file) |
-| `--client-secret` | Client secret (alternative to credentials file) |
-| `--config` | Path to config.yaml |
-| `--token-output` | Where to save token.json |
-| `--manual` | Manual OAuth flow (default) |
-| `--browser` | Automatic browser-based flow |
-### Authentication in Docker
-
-If you prefer to run OAuth setup inside the container instead of locally:
-
-**Option 1: Mount credentials.json**
-
-```bash
-# Create minimal credentials.json with just the required fields
-cat > credentials.json << 'EOF'
-{
-  "installed": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
-    "client_secret": "YOUR_CLIENT_SECRET"
-  }
-}
-EOF
-
-# Create empty token.json
-touch token.json
-
-# Run auth setup in container
 docker run -it --rm \
   -v $(pwd)/credentials.json:/app/credentials.json:ro \
-  -v $(pwd)/token.json:/app/token.json \
+  -v $(pwd)/token.json:/app/config/token.json \
   -v $(pwd)/config.yaml:/app/config/config.yaml:ro \
+
   ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest \
   python -m workspace_secretary.auth_setup \
     --credentials-file /app/credentials.json \
     --config /app/config/config.yaml \
-    --token-output /app/token.json
+    --token-output /app/config/token.json
 ```
 
-**Option 2: Pass credentials directly**
+Or pass credentials directly without a file:
 
 ```bash
 docker run -it --rm \
-  -v $(pwd)/token.json:/app/token.json \
+  -v $(pwd)/token.json:/app/config/token.json \
   -v $(pwd)/config.yaml:/app/config/config.yaml:ro \
   ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest \
   python -m workspace_secretary.auth_setup \
     --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
     --client-secret "YOUR_CLIENT_SECRET" \
     --config /app/config/config.yaml \
-    --token-output /app/token.json
+    --token-output /app/config/token.json
 ```
 
-**Option 3: Inside running container**
+**Option 2: Inside Running Container**
+
+If your container is already running:
 
 ```bash
-# If container is already running
 docker exec -it workspace-secretary \
   python -m workspace_secretary.auth_setup \
     --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
     --client-secret "YOUR_CLIENT_SECRET" \
     --config /app/config/config.yaml \
-    --token-output /app/token.json
+    --token-output /app/config/token.json
 ```
+
+::: details Option 3: Local Development (requires uv)
+For local development without Docker:
+
+```bash
+# Install uv first: https://docs.astral.sh/uv/
+uv run python -m workspace_secretary.auth_setup \
+  --credentials-file credentials.json \
+  --config config.yaml \
+  --token-output token.json
+```
+:::
+
+**Manual OAuth Flow (default):**
+1. Open the printed authorization URL in your browser
+2. Login and approve access
+3. Copy the **full redirect URL** from your browser (even if page doesn't load)
+4. Paste when prompted
+5. Tokens saved to `token.json`
 
 ::: tip Minimal credentials.json
 You only need `client_id` and `client_secret`. The full Google-downloaded JSON works too, but these two fields are sufficient:
@@ -228,6 +198,16 @@ You only need `client_id` and `client_secret`. The full Google-downloaded JSON w
 }
 ```
 :::
+
+**Auth Setup Options:**
+
+| Flag | Description |
+|------|-------------|
+| `--credentials-file` | Google OAuth credentials JSON |
+| `--client-id` | Client ID (alternative to credentials file) |
+| `--client-secret` | Client secret (alternative to credentials file) |
+| `--config` | Path to config.yaml |
+| `--token-output` | Where to save token.json |
 
 
 ### Step 5: Start and Verify
@@ -296,7 +276,7 @@ services:
     image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
-      - ./token.json:/app/token.json
+      - ./token.json:/app/config/token.json
       - ./data:/app/data
     labels:
       - "traefik.enable=true"
@@ -321,7 +301,7 @@ services:
     image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
     volumes:
       - ./config.yaml:/app/config/config.yaml:ro
-      - ./token.json:/app/token.json
+      - ./token.json:/app/config/token.json
       - ./data:/app/data
 
 volumes:
