@@ -216,6 +216,17 @@ AI: ✅ Reverts to standard Draft-Review-Send pattern (shows draft first)
 - `create_task` ✅ (adds to tasks.md, no external mutation)
 - `setup_smart_labels` ✅ (idempotent label creation)
 
+### Auto-Clean (No Confirmation - Special Case) 🟡
+- `quick_clean_inbox` ✅ - **The ONLY mutation tool that skips confirmation**
+
+**Why no confirmation?** This tool has built-in safety guarantees:
+1. Only affects emails where user is **NOT** in To: or CC: fields
+2. Only affects emails where user's email/name is **NOT** mentioned in body
+3. Emails are moved to `Secretary/Auto-Cleaned` (recoverable, not deleted)
+4. Processes in batches of 20, checking each email exactly once
+
+If both conditions fail (user not addressed AND not mentioned), the email is provably not directed at the user. This is deterministic, not heuristic.
+
 ---
 
 ## 🎓 Agent Training Guidelines

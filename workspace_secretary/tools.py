@@ -1763,3 +1763,105 @@ def register_tools(
         except Exception as e:
             logger.error(f"Error suggesting reschedule: {e}")
             return json.dumps({"error": str(e)}, indent=2)
+
+    @mcp.tool()
+    async def quick_clean_inbox(
+        ctx: Context = None,  # type: ignore
+        batch_size: int = 20,
+    ) -> str:
+        """Automatically clean inbox by moving emails where user is not directly addressed.
+
+        This tool processes ALL unread emails in batches, checking each exactly once.
+        Emails are moved to Secretary/Auto-Cleaned if:
+        1. User's email is NOT in the To: or CC: fields, AND
+        2. User's email/name is NOT mentioned in the body
+
+        UNIQUE: This is the only mutation tool that does NOT require user confirmation,
+        because it only affects emails where the user is provably not a direct recipient.
+
+        Args:
+            ctx: MCP context
+            batch_size: Number of emails to process per batch (default: 20)
+
+        Returns:
+            JSON with processing results including moved and skipped counts
+        """
+        client = get_client_from_context(ctx)
+        config = get_server_config_from_context(ctx)
+        identity = config.identity
+
+        try:
+            target_folder = "Secretary/Auto-Cleaned"
+            if not client.folder_exists(target_folder):
+                client.create_folder(target_folder)
+
+            all_unread_uids = client.search({"UNSEEN": True}, folder="INBOX")
+            if not all_unread_uids:
+                return json.dumps(
+                    {
+                        "status": "success",
+                        "message": "No unread emails to process",
+                        "total_processed": 0,
+                        "moved": 0,
+                        "skipped": 0,
+                    },
+                    indent=2,
+                )
+
+            total_to_process = len(all_unread_uids)
+            moved_count = 0
+            skipped_count = 0
+            moved_emails: list[dict[str, str]] = []
+            skipped_emails: list[dict[str, str]] = []
+
+            uid_list = list(all_unread_uids)
+
+            for batch_start in range(0, len(uid_list), batch_size):
+                batch_uids = uid_list[batch_start : batch_start + batch_size]
+                emails = client.fetch_emails(batch_uids, folder="INBOX")
+
+                for uid, email in emails.items():
+                    to_addresses = [str(addr).lower() for addr in email.to]
+                    cc_addresses = [str(addr).lower() for addr in (email.cc or [])]
+                    all_recipients = to_addresses + cc_addresses
+
+                    user_in_recipients = any(
+                        identity.matches_email(addr) for addr in all_recipients
+                    )
+
+                    body_text = email.content.get_best_content()
+                    user_mentioned_in_body = identity.matches_email(
+                        body_text
+                    ) or identity.matches_name(body_text)
+
+                    email_summary = {
+                        "uid": str(uid),
+                        "from": str(email.from_),
+                        "subject": email.subject or "(no subject)",
+                    }
+
+                    if not user_in_recipients and not user_mentioned_in_body:
+                        client.mark_email(uid, "INBOX", r"\Seen", True)
+                        client.move_email(uid, "INBOX", target_folder)
+                        moved_count += 1
+                        moved_emails.append(email_summary)
+                    else:
+                        skipped_count += 1
+                        skipped_emails.append(email_summary)
+
+            return json.dumps(
+                {
+                    "status": "success",
+                    "total_processed": total_to_process,
+                    "moved": moved_count,
+                    "skipped": skipped_count,
+                    "target_folder": target_folder,
+                    "moved_emails": moved_emails[:50],
+                    "skipped_emails": skipped_emails[:20],
+                },
+                indent=2,
+            )
+
+        except Exception as e:
+            logger.error(f"Error in quick_clean_inbox: {e}")
+            return json.dumps({"error": str(e)}, indent=2)
