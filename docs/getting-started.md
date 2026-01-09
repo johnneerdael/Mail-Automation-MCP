@@ -159,6 +159,76 @@ uv run python -m workspace_secretary.auth_setup \
 | `--token-output` | Where to save token.json |
 | `--manual` | Manual OAuth flow (default) |
 | `--browser` | Automatic browser-based flow |
+### Authentication in Docker
+
+If you prefer to run OAuth setup inside the container instead of locally:
+
+**Option 1: Mount credentials.json**
+
+```bash
+# Create minimal credentials.json with just the required fields
+cat > credentials.json << 'EOF'
+{
+  "installed": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }
+}
+EOF
+
+# Create empty token.json
+touch token.json
+
+# Run auth setup in container
+docker run -it --rm \
+  -v $(pwd)/credentials.json:/app/credentials.json:ro \
+  -v $(pwd)/token.json:/app/token.json \
+  -v $(pwd)/config.yaml:/app/config/config.yaml:ro \
+  ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest \
+  python -m workspace_secretary.auth_setup \
+    --credentials-file /app/credentials.json \
+    --config /app/config/config.yaml \
+    --token-output /app/token.json
+```
+
+**Option 2: Pass credentials directly**
+
+```bash
+docker run -it --rm \
+  -v $(pwd)/token.json:/app/token.json \
+  -v $(pwd)/config.yaml:/app/config/config.yaml:ro \
+  ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest \
+  python -m workspace_secretary.auth_setup \
+    --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
+    --client-secret "YOUR_CLIENT_SECRET" \
+    --config /app/config/config.yaml \
+    --token-output /app/token.json
+```
+
+**Option 3: Inside running container**
+
+```bash
+# If container is already running
+docker exec -it workspace-secretary \
+  python -m workspace_secretary.auth_setup \
+    --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
+    --client-secret "YOUR_CLIENT_SECRET" \
+    --config /app/config/config.yaml \
+    --token-output /app/token.json
+```
+
+::: tip Minimal credentials.json
+You only need `client_id` and `client_secret`. The full Google-downloaded JSON works too, but these two fields are sufficient:
+```json
+{
+  "installed": {
+    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }
+}
+```
+:::
+
 
 ### Step 5: Start and Verify
 
