@@ -54,10 +54,11 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./config:/app/config  # Contains config.yaml and email_cache.db
-    environment:
-      - WORKSPACE_TIMEZONE=America/Los_Angeles
+      - ./config.yaml:/app/config.yaml:ro  # Read-only config
+      - ./token.json:/app/token.json       # Read-write tokens
+      - ./config:/app/config               # Cache databases
     restart: always
+    command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 **Important**: Generate a unique bearer token for security:
@@ -155,10 +156,9 @@ See the [Architecture Documentation](/architecture) for technical details.
 
 ## What's New in v1.1.0
 
-- ✅ **Dual OAuth Mode** - `oauth_mode: api` (Gmail REST) or `oauth_mode: imap` (IMAP/SMTP)
-- ✅ **Third-party OAuth Support** - Use Thunderbird/GNOME credentials with `imap` mode
-- ✅ **SMTP with XOAUTH2** - Send emails via authenticated SMTP in IMAP mode
-- ✅ **Calendar works in both modes** - Google Calendar API is independent of email backend
+- ✅ **Third-party OAuth Support** - Use Thunderbird/GNOME credentials
+- ✅ **SMTP with XOAUTH2** - Send emails via authenticated SMTP
+- ✅ **Calendar independent** - Google Calendar API works regardless of email backend
 
 ## What's New in v0.2.0
 

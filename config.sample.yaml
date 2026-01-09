@@ -161,27 +161,3 @@ database:
 # =============================================================================
 calendar:
   enabled: false  # Set to true to enable calendar tools
-
-# =============================================================================
-# FULL EXAMPLE: PostgreSQL with Semantic Search
-# =============================================================================
-# Uncomment and configure for AI-powered semantic search:
-#
-# database:
-#   backend: postgres
-#   
-#   postgres:
-#     host: postgres
-#     port: 5432
-#     database: secretary
-#     user: secretary
-#     password: ${POSTGRES_PASSWORD}
-#     ssl_mode: prefer
-#   
-#   embeddings:
-#     enabled: true
-#     endpoint: https://api.openai.com/v1/embeddings
-#     model: text-embedding-3-small
-#     api_key: ${OPENAI_API_KEY}
-#     dimensions: 1536
-#     batch_size: 100

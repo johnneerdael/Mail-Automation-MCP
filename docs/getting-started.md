@@ -2,185 +2,168 @@
 
 Get up and running with Google Workspace Secretary MCP in minutes.
 
-::: tip What's New in v3.0.0
-- **PostgreSQL + pgvector** support for semantic search (optional)
-- **Simplified authentication** with manual OAuth flow as default
-- **IMAP-only architecture** for maximum compatibility
+::: tip What This Is
+**Secretary MCP is an AI-native Gmail client** — not an IMAP library. It provides:
+- **Signals** for intelligent reasoning (VIP, deadlines, questions)
+- **Staged mutations** requiring user confirmation
+- **Time-boxed batches** that never timeout
+- **Optional semantic search** via pgvector
 :::
 
 ## Prerequisites
 
-Before you begin, ensure you have:
-
-- **Docker and Docker Compose** installed (recommended)
-  - [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- **Google Cloud Project** with:
-  - Gmail API and Google Calendar API enabled
-  - OAuth2 credentials (`credentials.json`)
+- **Docker and Docker Compose** installed ([Install Docker Desktop](https://www.docker.com/products/docker-desktop/))
+- **Google Cloud Project** with Gmail API enabled and OAuth2 credentials
 - **Claude Desktop** or another MCP-compatible AI client
 
 ## Quick Start
 
 ### Step 1: Create Configuration
 
-Create a `config.yaml` file with **all available settings**:
+Create `config.yaml`:
 
 ```yaml
-# =============================================================================
-# Google Workspace Secretary MCP - Complete Configuration
-# =============================================================================
+# config.yaml - mount as read-only in Docker
 
-# User Identity (REQUIRED)
+bearer_auth:
+  enabled: true
+  token: "REPLACE-WITH-YOUR-UUID"  # See Step 2
+
 identity:
   email: your-email@gmail.com
   full_name: "Your Full Name"
-  aliases:                          # Optional: other email addresses you use
-    - your.alias@gmail.com
-    - work@company.com
+  aliases: []  # Empty list if no aliases
 
-# IMAP Configuration (REQUIRED)
 imap:
   host: imap.gmail.com
   port: 993
   username: your-email@gmail.com
   use_ssl: true
-  oauth2:
-    client_id: YOUR_CLIENT_ID.apps.googleusercontent.com
-    client_secret: YOUR_CLIENT_SECRET
-    # refresh_token is populated by auth_setup
-    # Or set via environment: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN
 
-# Timezone (REQUIRED) - Must be valid IANA timezone
-timezone: Europe/Amsterdam
+smtp:
+  host: smtp.gmail.com
+  port: 587
+  username: your-email@gmail.com
+  use_tls: true
 
-# Working Hours (REQUIRED)
+timezone: Europe/Amsterdam  # IANA format
+
 working_hours:
   start: "09:00"
   end: "17:00"
-  workdays: [1, 2, 3, 4, 5]         # 1=Monday, 7=Sunday
+  workdays: [1, 2, 3, 4, 5]  # Mon-Fri
 
-# Calendar Integration (Optional)
+vip_senders: []  # Add priority senders, or empty list
+
 calendar:
   enabled: true
 
-# VIP Senders (Optional) - Emails from these addresses get priority
-vip_senders:
-  - boss@company.com
-  - ceo@company.com
-  - important-client@example.com
-
-# Folder Restrictions (Optional) - Limit which folders are accessible
-allowed_folders:
-  - INBOX
-  - "[Gmail]/Sent Mail"
-  - "[Gmail]/Drafts"
-
-# Bearer Authentication (RECOMMENDED for production)
-bearer_auth:
-  enabled: true
-  token: "your-secure-token-here"   # Generate with: openssl rand -hex 32
-
-# Database Configuration (Optional - defaults to SQLite)
+# Database: sqlite (default) or postgres (for semantic search)
 database:
-  backend: sqlite                   # "sqlite" (default) or "postgres"
-  
-  # SQLite settings (used when backend: sqlite)
-  sqlite:
-    email_cache_path: config/email_cache.db
-    calendar_cache_path: config/calendar_cache.db
-  
-  # PostgreSQL settings (used when backend: postgres)
-  # postgres:
-  #   host: localhost
-  #   port: 5432
-  #   database: secretary
-  #   user: secretary
-  #   password: ${POSTGRES_PASSWORD}
-  #   ssl_mode: prefer
-  
-  # Embeddings for semantic search (requires postgres backend)
-  # embeddings:
-  #   enabled: true
-  #   endpoint: https://api.openai.com/v1/embeddings
-  #   model: text-embedding-3-small
-  #   api_key: ${OPENAI_API_KEY}
-  #   dimensions: 1536
-  #   batch_size: 100
+  backend: sqlite
 ```
 
-### Step 2: Create Docker Compose
+::: warning Critical Fields
+- `aliases: []` - Required even if empty
+- `vip_senders: []` - Required even if empty  
+- OAuth tokens go in `token.json`, NOT in config.yaml
+:::
 
-Create a `docker-compose.yml`:
+### Step 2: Generate Bearer Token
+
+::: code-group
+```bash [macOS]
+uuidgen
+```
+
+```bash [Linux]
+# Install uuid-runtime if uuidgen not found
+uuidgen
+# Or use OpenSSL (always available)
+openssl rand -hex 32
+```
+
+```powershell [Windows]
+[guid]::NewGuid().ToString()
+```
+:::
+
+Add the generated token to your `config.yaml` under `bearer_auth.token`.
+
+### Step 3: Create Docker Compose
 
 ```yaml
+# docker-compose.yml
 services:
   workspace-secretary:
     image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
     container_name: workspace-secretary
     restart: always
     ports:
-      - "8080:8080"
       - "8000:8000"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro    # Configuration (read-only)
-      - ./token.json:/app/token.json         # OAuth tokens (read-write)
-      - ./config:/app/config                 # Cache databases
-    environment:
-      - LOG_LEVEL=INFO
+      - ./config.yaml:/app/config.yaml:ro   # Read-only config
+      - ./token.json:/app/token.json        # Read-write tokens
+      - ./config:/app/config                # Cache databases
     command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-::: warning Volume Mounts Explained
-- `config.yaml` - Your configuration file (read-only is fine)
-- `token.json` - OAuth tokens, must be writable for token refresh
-- `config/` - Contains SQLite cache databases, must be writable
+::: warning Volume Mounts
+- `config.yaml` mounted `:ro` (read-only) for security
+- `token.json` must be writable for OAuth token refresh
+- `config/` stores SQLite cache, must be writable
 :::
 
-### Step 3: Run Authentication
+### Step 4: Run OAuth Setup
 
-The authentication flow uses **manual mode by default**, which works with any OAuth redirect URI:
-
+Create an empty token.json first:
 ```bash
-# Start container first
-docker compose up -d
-
-# Run authentication setup
-docker exec -it workspace-secretary uv run python -m workspace_secretary.auth_setup \
-  --credentials-file /app/credentials.json \
-  --config /app/config.yaml \
-  --output /app/config.yaml \
-  --token-output /app/token.json
+touch token.json
 ```
 
-This will:
-1. Display an authorization URL
-2. Ask you to visit the URL and authorize
-3. Ask you to paste the redirect URL (containing the auth code)
-4. Save tokens to `token.json` and update `config.yaml`
+Run authentication (manual flow is default):
+
+```bash
+# With credentials.json from Google Cloud Console
+uv run python -m workspace_secretary.auth_setup \
+  --credentials-file credentials.json \
+  --config config.yaml \
+  --token-output token.json
+
+# Or with client ID/secret directly
+uv run python -m workspace_secretary.auth_setup \
+  --client-id "YOUR_CLIENT_ID.apps.googleusercontent.com" \
+  --client-secret "YOUR_CLIENT_SECRET" \
+  --config config.yaml \
+  --token-output token.json
+```
+
+**Manual OAuth Flow:**
+1. Open the printed authorization URL in your browser
+2. Login and approve access
+3. Copy the **full redirect URL** from your browser (even if page doesn't load)
+4. Paste when prompted
+5. Tokens saved to `token.json`
 
 **Auth Setup Options:**
 
 | Flag | Description |
 |------|-------------|
-| `--credentials-file` | Path to Google OAuth credentials JSON |
+| `--credentials-file` | Google OAuth credentials JSON |
 | `--client-id` | Client ID (alternative to credentials file) |
 | `--client-secret` | Client secret (alternative to credentials file) |
-| `--config` | Existing config.yaml to update |
-| `--output` | Where to save updated config (default: config.yaml) |
-| `--token-output` | Where to save token.json separately |
-| `--manual` | Use manual OAuth flow (default) |
-| `--browser` | Use automatic browser-based OAuth flow |
+| `--config` | Path to config.yaml |
+| `--token-output` | Where to save token.json |
+| `--manual` | Manual OAuth flow (default) |
+| `--browser` | Automatic browser-based flow |
 
-### Step 4: Restart and Verify
+### Step 5: Start and Verify
 
 ```bash
-# Restart to pick up new tokens
-docker compose restart
-
-# Check logs
+docker compose up -d
 docker compose logs -f
 
-# Test connection
+# Test health endpoint
 curl http://localhost:8000/health
 ```
 
@@ -189,13 +172,12 @@ curl http://localhost:8000/health
 ### Create OAuth2 Credentials
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
+2. Create or select a project
 3. Enable **Gmail API** and **Google Calendar API**:
-   - Navigate to **APIs & Services** → **Library**
-   - Search and enable both APIs
+   - APIs & Services → Library → Search and enable both
 
 4. Configure OAuth Consent Screen:
-   - Go to **APIs & Services** → **OAuth consent screen**
+   - APIs & Services → OAuth consent screen
    - User type: **External** (or Internal for Workspace)
    - Add your email as test user
    - Add scopes:
@@ -203,36 +185,20 @@ curl http://localhost:8000/health
      - `https://www.googleapis.com/auth/calendar`
 
 5. Create Credentials:
-   - Go to **APIs & Services** → **Credentials**
-   - Click **Create Credentials** → **OAuth client ID**
-   - Application type: **Desktop app** (recommended for manual flow)
-   - Download JSON and save as `credentials.json`
+   - APIs & Services → Credentials → Create Credentials → OAuth client ID
+   - Application type: **Desktop app**
+   - Download JSON as `credentials.json`
 
-::: tip Redirect URI for Manual Flow
-The manual OAuth flow works with any redirect URI, including `http://localhost`. This makes it compatible with headless servers and containers.
+::: tip Manual Flow Advantage
+The manual OAuth flow works with any redirect URI, including `http://localhost`. Perfect for headless servers and containers.
 :::
 
 ## Production Deployment
 
-### With Traefik (Automatic HTTPS)
+### With Traefik
 
 ```yaml
-# docker-compose.traefik.yml
 services:
-  traefik:
-    image: traefik:v3.2
-    command:
-      - "--providers.docker=true"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
-
   workspace-secretary:
     image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
     volumes:
@@ -246,10 +212,9 @@ services:
     command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-### With Caddy (Automatic HTTPS)
+### With Caddy
 
 ```yaml
-# docker-compose.caddy.yml
 services:
   caddy:
     image: caddy:2-alpine
@@ -267,6 +232,9 @@ services:
       - ./token.json:/app/token.json
       - ./config:/app/config
     command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+
+volumes:
+  caddy_data:
 ```
 
 **Caddyfile:**
@@ -276,43 +244,36 @@ mcp.yourdomain.com {
 }
 ```
 
-### With PostgreSQL + Semantic Search
+::: warning Caddy Let's Encrypt Caveats
+Automatic HTTPS requires:
+- Ports 80/443 reachable from internet
+- DNS A/AAAA record pointing to your server
+- No CDN/proxy interference
 
-For AI-powered semantic search capabilities:
+**Common failures:**
+- ISP blocks port 80
+- Behind NAT without port forwarding
+- IPv6 AAAA exists but routing broken
 
-```yaml
-# docker-compose.postgres.yml
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    environment:
-      POSTGRES_USER: secretary
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: secretary
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U secretary"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+**For wildcards or complex setups:** Use [DNS challenge](https://caddyserver.com/docs/automatic-https#dns-challenge)
+:::
 
-  workspace-secretary:
-    image: ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./token.json:/app/token.json
-      - ./config:/app/config
-    command: ["--config", "/app/config.yaml", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+### With PostgreSQL (Semantic Search)
 
-volumes:
-  postgres_data:
+For AI-powered search by meaning:
+
+```bash
+# Create .env with secrets
+cat > .env << 'EOF'
+POSTGRES_PASSWORD=your-secure-password
+OPENAI_API_KEY=sk-your-openai-key
+EOF
+
+# Start with PostgreSQL
+docker compose -f docker-compose.postgres.yml up -d
 ```
 
-Update `config.yaml` for PostgreSQL:
+Update `config.yaml`:
 
 ```yaml
 database:
@@ -328,13 +289,16 @@ database:
     endpoint: https://api.openai.com/v1/embeddings
     model: text-embedding-3-small
     api_key: ${OPENAI_API_KEY}
+    dimensions: 1536
 ```
 
-See [Semantic Search Guide](/guide/semantic-search) for details on using vector search.
+The database and pgvector extension are created automatically on first start.
+
+See [Semantic Search Guide](/guide/semantic-search) for details.
 
 ## Connecting AI Clients
 
-The server uses **Streamable HTTP** transport at: `http://localhost:8000/mcp`
+Server endpoint: `http://localhost:8000/mcp`
 
 ### Claude Desktop
 
@@ -360,66 +324,43 @@ claude mcp add --transport http workspace-secretary http://localhost:8000/mcp \
   --header "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### Cursor / VS Code / Other Clients
-
-See [AI Client Configuration](/guide/clients) for complete setup instructions for all supported clients.
-
-## Environment Variables
-
-All configuration can also be set via environment variables:
-
-| Variable | Description |
-|----------|-------------|
-| `GMAIL_CLIENT_ID` | OAuth2 client ID |
-| `GMAIL_CLIENT_SECRET` | OAuth2 client secret |
-| `GMAIL_REFRESH_TOKEN` | OAuth2 refresh token |
-| `POSTGRES_HOST` | PostgreSQL host |
-| `POSTGRES_PORT` | PostgreSQL port |
-| `POSTGRES_DATABASE` | PostgreSQL database name |
-| `POSTGRES_USER` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | PostgreSQL password |
-| `OPENAI_API_KEY` | OpenAI API key for embeddings |
-| `EMBEDDINGS_API_KEY` | Alternative embeddings API key |
-| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-
 ## Troubleshooting
 
-### OAuth2 "App Not Verified"
+### OAuth "App Not Verified"
 
-Click **Advanced** → **Go to [App Name] (unsafe)**. This is normal for development apps.
+Click **Advanced** → **Go to [App Name] (unsafe)**. Normal for development apps.
 
 ### Token Refresh Fails
 
 Re-run auth setup:
 ```bash
-docker exec -it workspace-secretary uv run python -m workspace_secretary.auth_setup \
-  --credentials-file /app/credentials.json \
-  --output /app/config.yaml \
-  --token-output /app/token.json
+uv run python -m workspace_secretary.auth_setup \
+  --credentials-file credentials.json \
+  --config config.yaml \
+  --token-output token.json
 ```
-
-### Permission Denied Errors
-
-1. Ensure `token.json` exists and is writable
-2. Verify APIs are enabled in Google Cloud Console
-3. Check that OAuth scopes include Gmail and Calendar
 
 ### Container Won't Start
 
 ```bash
-# Check logs
 docker compose logs workspace-secretary
 
 # Common issues:
 # - config.yaml not found: check volume mount paths
 # - Invalid timezone: use IANA format (Europe/Amsterdam, not CET)
-# - Missing required fields: check identity.email, working_hours, timezone
+# - Missing aliases: [] or vip_senders: []
 ```
+
+### Permission Denied
+
+1. Ensure `token.json` exists: `touch token.json`
+2. Verify APIs enabled in Google Cloud Console
+3. Check OAuth scopes include Gmail and Calendar
 
 ## Next Steps
 
-- [Configuration Guide](/guide/configuration) - All configuration options
-- [Tools Reference](/api/) - Available MCP tools
+- [Configuration Guide](/guide/configuration) - All settings explained
+- [MCP Tools Reference](/api/) - Available tools
 - [Semantic Search](/guide/semantic-search) - AI-powered email search
 - [Agent Patterns](/guide/agents) - Building intelligent workflows
 
