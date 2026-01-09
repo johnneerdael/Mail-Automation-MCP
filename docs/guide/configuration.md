@@ -8,6 +8,38 @@ The server requires a `config.yaml` file. Copy `config.sample.yaml` as a startin
 
 ## Required Fields
 
+### OAuth Mode
+
+```yaml
+oauth_mode: api  # or "imap"
+```
+
+**Options:**
+- `api` (default): Uses Gmail REST API. Requires your own GCP OAuth credentials.
+- `imap`: Uses IMAP/SMTP protocols. Works with third-party OAuth credentials (Thunderbird, GNOME).
+
+See [OAuth Workaround](./oauth_workaround) for using third-party credentials.
+
+### User Identity
+
+```yaml
+identity:
+  email: your-email@gmail.com
+  full_name: "Your Full Name"
+  aliases:
+    - alternate@gmail.com
+    - work@company.com
+```
+
+**Fields:**
+- `email` (required): Your primary email address
+- `full_name` (optional): Used to detect if you're mentioned in email body
+- `aliases` (optional): Additional email addresses you use
+
+**Used by:**
+- `get_daily_briefing`: Signals `is_addressed_to_me` and `mentions_my_name`
+- `quick_clean_inbox`: Determines which emails can be auto-cleaned
+
 ### IMAP Configuration
 
 ```yaml

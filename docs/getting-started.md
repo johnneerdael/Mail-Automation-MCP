@@ -30,6 +30,12 @@ docker pull ghcr.io/johnneerdael/google-workspace-secretary-mcp:latest
 Create a `config.yaml` file (see [Configuration Guide](/guide/configuration)):
 
 ```yaml
+oauth_mode: api  # or "imap" for third-party OAuth
+
+identity:
+  email: your-email@gmail.com
+  full_name: "Your Name"
+
 imap:
   host: imap.gmail.com
   port: 993

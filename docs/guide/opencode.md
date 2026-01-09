@@ -398,20 +398,35 @@ User: "What's in the invoice attachment?"
 
 ---
 
-### /clean-inbox - Bulk Cleanup
+### /clean-inbox - Automatic Inbox Cleanup
 **File**: `.opencode/command/clean-inbox.md`
 
 **Usage**: `/clean-inbox`
 
 **What it does**:
-1. Scans for low-priority emails (newsletters, automated, CC-only)
-2. Groups by confidence (high/medium/low)
-3. Presents approval prompts per AGENTS.md rules
-4. Executes: mark as read + apply label + archive
+1. Calls `quick_clean_inbox` tool (processes ALL unread emails in batches of 20)
+2. For each email, checks two conditions:
+   - User NOT in To: or CC: fields
+   - User's email/name NOT mentioned in body
+3. If BOTH conditions true → marks as read + moves to `Secretary/Auto-Cleaned`
+4. Returns summary of moved vs skipped emails
 
-**Approval Display Rules**:
-- **High confidence**: Date/From/To/CC/Subject only (max 100)
-- **Medium/Low confidence**: Headers + 300-char body (max 10)
+**UNIQUE**: This is the **only command that does NOT require confirmation** because:
+- It only affects emails where the user is provably not a direct recipient
+- Emails are moved (not deleted) - fully recoverable
+- Each email is checked exactly once (no loops)
+
+**Example Output**:
+```
+Processed 45 unread emails:
+- Moved: 12 emails to Secretary/Auto-Cleaned
+- Skipped: 33 emails (you were addressed)
+
+Moved emails:
+- From: notifications@github.com | Subject: [repo] New issue opened
+- From: noreply@jira.com | Subject: PROJ-123 was updated
+...
+```
 
 ---
 
@@ -490,35 +505,28 @@ User: /morning
 
 ---
 
-### Workflow 2: Bulk Inbox Cleanup
+### Workflow 2: Automatic Inbox Cleanup
 ```
 User: /clean-inbox
 
 @secretary: [Delegates to @bulk-cleaner]
-@bulk-cleaner: [Scans for newsletters, automated, CC-only]
-@bulk-cleaner: [Groups by confidence]
-@bulk-cleaner: "I've found cleanup candidates in two groups:
+@bulk-cleaner: [Calls quick_clean_inbox tool]
+@bulk-cleaner: "✅ Inbox cleanup complete!
                 
-                Group 1: 63 newsletter emails (high confidence >90%)
-                [Shows Date/From/To/CC/Subject for all 63]
+                Processed 45 unread emails:
+                - Moved: 12 emails to Secretary/Auto-Cleaned
+                - Skipped: 33 emails (you were addressed)
                 
-                Group 2: 8 CC-only emails (medium confidence 50-90%)
-                [Shows headers + 300-char body for each 8]
+                Moved emails (first 5):
+                - From: notifications@github.com | Subject: [repo] New issue
+                - From: noreply@jira.com | Subject: PROJ-123 updated
+                - From: team-announce@company.com | Subject: Office Hours Change
+                ...
                 
-                Approve Group 1? (yes/no/show-details)"
-
-User: yes
-
-@bulk-cleaner: [Executes mark_as_read + modify_gmail_labels for all 63]
-@bulk-cleaner: "✅ Processed 63 emails: marked as read, labeled Secretary/Newsletter, archived.
-                
-                Review Group 2? (yes/no)"
-
-User: yes
-
-@bulk-cleaner: [Executes for Group 2]
-@bulk-cleaner: "✅ Processed 8 emails. Total: 71 emails cleaned."
+                Skipped emails remain in INBOX for your attention."
 ```
+
+**Note**: This is the only workflow that does NOT require confirmation. The `quick_clean_inbox` tool has built-in safety guarantees (only moves emails where you're not addressed AND not mentioned).
 
 ---
 
