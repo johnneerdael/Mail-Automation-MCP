@@ -19,7 +19,7 @@ hero:
 features:
   - icon: ⚡
     title: Read/Write Split Architecture
-    details: v4.0 brings a complete architecture rewrite. Engine owns all database writes, MCP is read-only. Both use the same DatabaseInterface for SQLite or PostgreSQL.
+    details: v4.1 brings efficient CONDSTORE & IDLE sync. Engine owns all database writes, MCP is read-only. Skip sync when mailbox unchanged, instant push notifications.
     
   - icon: 🤖
     title: AI-Native Design

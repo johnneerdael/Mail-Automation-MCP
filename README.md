@@ -1,6 +1,6 @@
 # Gmail Secretary MCP
 
-[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
+[![Version](https://img.shields.io/badge/version-4.1.1-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 An AI-native Model Context Protocol (MCP) server that transforms your Gmail and Google Calendar into an intelligent, programmable assistant for Claude and other AI systems.
