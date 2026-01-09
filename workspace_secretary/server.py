@@ -89,6 +89,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict]:
             "gmail_client": gmail_client,
             "smtp_client": smtp_client,
             "oauth_mode": oauth_mode,
+            "config": config,
         }
     finally:
         logger.info("Disconnecting from IMAP server...")

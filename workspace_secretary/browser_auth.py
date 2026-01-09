@@ -456,14 +456,15 @@ def perform_oauth_flow(
         "token_expiry": expiry,
     }
 
-    # Load existing config if specified
+    # Load existing config - check config_path first, then config_output
     config_data = {}
-    if config_path:
-        config_file = Path(config_path)
+    config_to_load = config_path or config_output
+    if config_to_load:
+        config_file = Path(config_to_load)
         if config_file.exists():
             with open(config_file, "r") as f:
                 config_data = yaml.safe_load(f) or {}
-                logger.info(f"Loaded existing configuration from {config_path}")
+                logger.info(f"Loaded existing configuration from {config_to_load}")
 
     # Update config with OAuth2 data
     if "imap" not in config_data:
