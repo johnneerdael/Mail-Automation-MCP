@@ -189,8 +189,28 @@ curl http://localhost:8000/health
    - Application type: **Desktop app**
    - Download JSON as `credentials.json`
 
+The downloaded `credentials.json` looks like this:
+
+```json
+{
+  "installed": {
+    "client_id": "123456789-abcdefg.apps.googleusercontent.com",
+    "project_id": "your-project-name",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_secret": "GOCSPX-your-client-secret",
+    "redirect_uris": ["http://localhost"]
+  }
+}
+```
+
+::: tip Only Two Fields Matter
+The auth setup only uses `client_id` and `client_secret` from this file. You can alternatively pass them directly via `--client-id` and `--client-secret` flags.
+:::
+
 ::: tip Manual Flow Advantage
-The manual OAuth flow works with any redirect URI, including `http://localhost`. Perfect for headless servers and containers.
+The manual OAuth flow works with any redirect URI, including `http://localhost`. Perfect for headless servers and containers. After auth setup completes, `credentials.json` is no longer needed - only `token.json` is used at runtime.
 :::
 
 ## Production Deployment
