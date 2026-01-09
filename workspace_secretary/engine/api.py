@@ -484,9 +484,8 @@ async def sync_emails():
                         modseq=data["modseq"],
                         gmail_labels=data.get("gmail_labels"),
                     )
-                logger.debug(
-                    f"CONDSTORE: updated flags for {len(changed)} emails in {folder}"
-                )
+                if changed:
+                    logger.info(f"Updated flags for {len(changed)} emails in {folder}")
 
             uids = state.imap_client.search(f"UID {stored_uidnext}:*", folder=folder)
             new_uids = [uid for uid in uids if uid >= stored_uidnext]
@@ -499,7 +498,7 @@ async def sync_emails():
                     state.database.upsert_email(**params)
                     if uid > max_uid:
                         max_uid = uid
-                logger.debug(f"Synced {len(emails)} new emails from {folder}")
+                logger.info(f"Synced {len(emails)} new emails from {folder}")
             else:
                 max_uid = stored_uidnext
 
