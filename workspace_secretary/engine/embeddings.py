@@ -266,6 +266,10 @@ class EmbeddingsClient:
         ]
         return await self.embed_texts(texts)
 
+    async def embed_query(self, query: str) -> EmbeddingResult:
+        """Embed a search query. For OpenAI-compatible APIs, same as embed_text."""
+        return await self.embed_text(query)
+
 
 class EmbeddingsSyncWorker:
     """Background worker for syncing embeddings to database."""
@@ -523,6 +527,15 @@ class CohereEmbeddingsClient:
             self._prepare_text(e.get("subject"), e.get("body_text", "")) for e in emails
         ]
         return await self.embed_texts(texts)
+
+    async def embed_query(self, query: str) -> EmbeddingResult:
+        """Embed a search query using search_query input type for better retrieval."""
+        original_input_type = self.input_type
+        self.input_type = "search_query"
+        try:
+            return await self.embed_text(query)
+        finally:
+            self.input_type = original_input_type
 
 
 def create_embeddings_client(

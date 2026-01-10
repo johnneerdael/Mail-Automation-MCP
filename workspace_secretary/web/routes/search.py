@@ -49,6 +49,33 @@ def extract_name(addr: str) -> str:
 
 
 async def get_embedding(text: str) -> Optional[list[float]]:
+    provider = os.environ.get("EMBEDDINGS_PROVIDER", "openai_compat")
+
+    if provider == "cohere":
+        api_key = os.environ.get("EMBEDDINGS_API_KEY") or os.environ.get(
+            "COHERE_API_KEY"
+        )
+        model = os.environ.get("EMBEDDINGS_MODEL", "embed-v4.0")
+        if not api_key:
+            return None
+        try:
+            import cohere
+
+            client = cohere.ClientV2(api_key=api_key)
+            response = client.embed(
+                texts=[text],
+                model=model,
+                input_type="search_query",
+                embedding_types=["float"],
+            )
+            return (
+                list(response.embeddings.float_[0])
+                if response.embeddings.float_
+                else None
+            )
+        except Exception:
+            return None
+
     api_base = os.environ.get("EMBEDDINGS_API_BASE")
     api_key = os.environ.get("EMBEDDINGS_API_KEY", "")
     model = os.environ.get("EMBEDDINGS_MODEL", "text-embedding-3-small")

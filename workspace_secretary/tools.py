@@ -1028,7 +1028,7 @@ def register_tools(
                     return json.dumps({"error": "Database does not support embeddings"})
 
                 # Get query embedding
-                result = await embeddings.embed_text(query)
+                result = await embeddings.embed_query(query)
 
                 # Search
                 emails = db.semantic_search(

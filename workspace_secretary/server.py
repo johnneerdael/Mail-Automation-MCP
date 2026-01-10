@@ -277,7 +277,7 @@ def _register_tools(server: FastMCP, config: ServerConfig) -> None:
             emb = _state.embeddings_client
             if db is None or emb is None:
                 return "Semantic search not available."
-            result = await emb.embed_text(query)
+            result = await emb.embed_query(query)
             try:
                 emails = db.semantic_search(
                     query_embedding=result.embedding,
