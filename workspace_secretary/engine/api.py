@@ -369,11 +369,11 @@ async def lifespan(app: FastAPI):
 
 async def embeddings_loop():
     """Best-effort background embeddings generation. Never blocks IMAP sync."""
-    embeddings_interval = int(os.environ.get("EMBEDDINGS_INTERVAL", "60"))
     max_consecutive_failures = 5
     cooldown_minutes = 10
+    idle_sleep = 30
 
-    logger.info(f"Embeddings loop started, interval={embeddings_interval}s")
+    logger.info("Embeddings loop started")
 
     while state.running:
         try:
@@ -383,15 +383,18 @@ async def embeddings_loop():
                         state._embeddings_cooldown_until - datetime.now()
                     ).seconds
                     logger.debug(f"Embeddings in cooldown, {remaining}s remaining")
-                    await asyncio.sleep(embeddings_interval)
+                    await asyncio.sleep(idle_sleep)
                     continue
                 else:
                     state._embeddings_cooldown_until = None
                     state._embeddings_consecutive_failures = 0
                     logger.info("Embeddings cooldown ended, resuming")
 
-            await generate_embeddings()
+            embedded = await generate_embeddings()
             state._embeddings_consecutive_failures = 0
+
+            if not embedded:
+                await asyncio.sleep(idle_sleep)
 
         except Exception as e:
             state._embeddings_consecutive_failures += 1
@@ -406,8 +409,7 @@ async def embeddings_loop():
                 logger.warning(
                     f"Embeddings paused for {cooldown_minutes} minutes after {max_consecutive_failures} failures"
                 )
-
-        await asyncio.sleep(embeddings_interval)
+            await asyncio.sleep(idle_sleep)
 
 
 async def sync_loop():
@@ -558,28 +560,26 @@ async def sync_emails():
             logger.error(f"Error syncing folder {folder}: {e}")
 
 
-async def generate_embeddings():
+async def generate_embeddings() -> int:
     """Generate embeddings for emails that don't have them yet."""
     if not state.database or not state.database.supports_embeddings():
         logger.debug("Embeddings: database doesn't support embeddings")
-        return
+        return 0
 
     if not state.config or not state.config.database.embeddings:
         logger.debug("Embeddings: not configured in config.yaml")
-        return
+        return 0
 
     embeddings_config = state.config.database.embeddings
     if not embeddings_config.enabled:
         logger.debug("Embeddings: disabled in config")
-        return
+        return 0
 
-    # Get folders to process
     folders = ["INBOX"]
     if state.config.allowed_folders:
         folders = state.config.allowed_folders
 
     try:
-        # Import and create embeddings client (lazy import)
         try:
             from workspace_secretary.engine.embeddings import (
                 EmbeddingsSyncWorker,
@@ -589,11 +589,11 @@ async def generate_embeddings():
             logger.debug(
                 "Embeddings module not available, skipping embedding generation"
             )
-            return
+            return 0
 
         client = create_embeddings_client(embeddings_config)
         if not client:
-            return
+            return 0
 
         worker = EmbeddingsSyncWorker(
             client=client,
@@ -605,9 +605,11 @@ async def generate_embeddings():
         total = await worker.sync_all_folders()
         if total > 0:
             logger.debug(f"Generated embeddings for {total} emails")
+        return total
 
     except Exception as e:
         logger.error(f"Embedding generation error: {e}")
+        raise
 
 
 async def idle_monitor():
