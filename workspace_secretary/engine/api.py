@@ -905,10 +905,27 @@ async def initial_lockstep_sync_and_embed():
     total_embedded = 0
 
     for folder in folders:
-        logger.info(f"[{folder}] Starting lockstep sync+embed...")
         folder_synced = 0
         folder_embedded = 0
         cursor_uid = 0
+
+        def _get_folder_count():
+            try:
+                client = state._imap_pool.get(timeout=60)
+            except Empty:
+                return 0
+            try:
+                info = client.select_folder(folder, readonly=True)
+                return info.get("exists", 0)
+            finally:
+                state._imap_pool.put(client)
+
+        folder_total = await loop.run_in_executor(
+            state._sync_executor, _get_folder_count
+        )
+        logger.info(
+            f"[{folder}] Starting lockstep sync+embed ({folder_total} emails)..."
+        )
 
         while state.running:
 
@@ -931,12 +948,14 @@ async def initial_lockstep_sync_and_embed():
 
             folder_synced += len(synced_uids)
             cursor_uid = next_cursor
-            logger.info(f"[{folder}] Synced {folder_synced} emails...")
+            pct = (folder_synced / folder_total * 100) if folder_total > 0 else 0
+            logger.info(
+                f"[{folder}] Synced {folder_synced}/{folder_total} ({pct:.1f}%)"
+            )
 
             if supports_embeddings:
                 embedded = await embed_specific_uids(folder, synced_uids)
                 folder_embedded += embedded
-                logger.info(f"[{folder}] Embedded {folder_embedded} emails...")
 
             if next_cursor == 0:
                 break
