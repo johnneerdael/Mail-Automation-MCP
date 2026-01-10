@@ -38,7 +38,7 @@ class EmbeddingsClient:
         api_key: Optional[str] = None,
         dimensions: int = 1536,
         batch_size: int = 100,
-        timeout: float = 60.0,
+        timeout: float = 30.0,
     ):
         """Initialize embeddings client.
 
@@ -139,7 +139,6 @@ class EmbeddingsClient:
         return results
 
     async def _embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
-        """Embed a single batch of texts."""
         content_hashes = [self._compute_hash(t) for t in texts]
 
         payload = {
@@ -147,10 +146,12 @@ class EmbeddingsClient:
             "input": texts,
         }
 
-        # Some APIs support dimensions parameter
         if self.dimensions and self.dimensions != 1536:
             payload["dimensions"] = self.dimensions
 
+        logger.debug(
+            f"Requesting embeddings for {len(texts)} texts from {self.embeddings_url}"
+        )
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 self.embeddings_url,
@@ -159,6 +160,9 @@ class EmbeddingsClient:
             )
             response.raise_for_status()
             data = response.json()
+        logger.debug(
+            f"Received embeddings response with {len(data.get('data', []))} vectors"
+        )
 
         # Parse response
         results = []
@@ -238,19 +242,10 @@ class EmbeddingsSyncWorker:
         self._task: Optional[asyncio.Task] = None
 
     async def sync_folder(self, folder: str) -> int:
-        """Sync embeddings for a single folder.
-
-        Args:
-            folder: Folder name to sync
-
-        Returns:
-            Number of emails embedded
-        """
         if not self.database.supports_embeddings():
             logger.warning("Database does not support embeddings")
             return 0
 
-        # Get emails needing embeddings
         emails = self.database.get_emails_needing_embedding(
             folder, limit=self.batch_size
         )
@@ -261,21 +256,33 @@ class EmbeddingsSyncWorker:
 
         logger.info(f"Embedding {len(emails)} emails from {folder}")
 
-        # Generate embeddings
-        results = await self.client.embed_emails(emails)
-
-        # Store embeddings
-        for email, result in zip(emails, results):
-            self.database.upsert_embedding(
-                email_uid=email["uid"],
-                email_folder=email["folder"],
-                embedding=result.embedding,
-                model=result.model,
-                content_hash=result.content_hash,
+        try:
+            results = await self.client.embed_emails(emails)
+        except httpx.TimeoutException:
+            logger.error(f"Embeddings timeout for {len(emails)} emails in {folder}")
+            raise
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Embeddings API error {e.response.status_code}: {e.response.text[:200]}"
             )
+            raise
 
-        logger.info(f"Embedded {len(results)} emails from {folder}")
-        return len(results)
+        stored = 0
+        for email, result in zip(emails, results):
+            try:
+                self.database.upsert_embedding(
+                    email_uid=email["uid"],
+                    email_folder=email["folder"],
+                    embedding=result.embedding,
+                    model=result.model,
+                    content_hash=result.content_hash,
+                )
+                stored += 1
+            except Exception as e:
+                logger.error(f"Failed to store embedding for UID {email['uid']}: {e}")
+
+        logger.info(f"Embedded {stored}/{len(results)} emails from {folder}")
+        return stored
 
     async def sync_all_folders(self) -> int:
         """Sync embeddings for all configured folders.

@@ -48,12 +48,15 @@ class EngineState:
         self.database: Optional[DatabaseInterface] = None
         self.sync_task: Optional[asyncio.Task] = None
         self.idle_task: Optional[asyncio.Task] = None
+        self.embeddings_task: Optional[asyncio.Task] = None
         self.enrollment_task: Optional[asyncio.Task] = None
         self.running = False
         self.enrolled = False
         self.enrollment_error: Optional[str] = None
         self._sync_debounce_task: Optional[asyncio.Task] = None
         self._sync_debounce_delay: float = 2.0
+        self._embeddings_consecutive_failures: int = 0
+        self._embeddings_cooldown_until: Optional[datetime] = None
 
 
 state = EngineState()
@@ -364,25 +367,62 @@ async def lifespan(app: FastAPI):
         Path(SOCKET_PATH).unlink()
 
 
+async def embeddings_loop():
+    """Best-effort background embeddings generation. Never blocks IMAP sync."""
+    embeddings_interval = int(os.environ.get("EMBEDDINGS_INTERVAL", "60"))
+    max_consecutive_failures = 5
+    cooldown_minutes = 10
+
+    while state.running:
+        try:
+            if state._embeddings_cooldown_until:
+                if datetime.now() < state._embeddings_cooldown_until:
+                    remaining = (
+                        state._embeddings_cooldown_until - datetime.now()
+                    ).seconds
+                    logger.debug(f"Embeddings in cooldown, {remaining}s remaining")
+                    await asyncio.sleep(embeddings_interval)
+                    continue
+                else:
+                    state._embeddings_cooldown_until = None
+                    state._embeddings_consecutive_failures = 0
+                    logger.info("Embeddings cooldown ended, resuming")
+
+            await generate_embeddings()
+            state._embeddings_consecutive_failures = 0
+
+        except Exception as e:
+            state._embeddings_consecutive_failures += 1
+            logger.error(
+                f"Embeddings error ({state._embeddings_consecutive_failures}/{max_consecutive_failures}): {e}"
+            )
+
+            if state._embeddings_consecutive_failures >= max_consecutive_failures:
+                state._embeddings_cooldown_until = datetime.now() + timedelta(
+                    minutes=cooldown_minutes
+                )
+                logger.warning(
+                    f"Embeddings paused for {cooldown_minutes} minutes after {max_consecutive_failures} failures"
+                )
+
+        await asyncio.sleep(embeddings_interval)
+
+
 async def sync_loop():
     """Background sync loop for email and calendar."""
     sync_interval = int(os.environ.get("SYNC_INTERVAL", "300"))
 
-    # Start IDLE monitor if available
     if state.idle_client and state.idle_client.has_idle_capability():
         state.idle_task = asyncio.create_task(idle_monitor())
 
+    if state.database and state.database.supports_embeddings():
+        state.embeddings_task = asyncio.create_task(embeddings_loop())
+
     while state.running:
         try:
-            # Email sync
             if state.database and state.imap_client:
                 logger.debug("Running email sync...")
                 await sync_emails()
-
-            # Generate embeddings if supported (PostgreSQL with pgvector)
-            if state.database and state.database.supports_embeddings():
-                logger.debug("Generating embeddings for new emails...")
-                await generate_embeddings()
 
         except Exception as e:
             logger.error(f"Sync error: {e}")
@@ -491,7 +531,10 @@ async def sync_emails():
             new_uids = [uid for uid in uids if uid >= stored_uidnext]
 
             if new_uids:
-                emails = state.imap_client.fetch_emails(new_uids, folder, limit=500)
+                new_uids_desc = sorted(new_uids, reverse=True)
+                emails = state.imap_client.fetch_emails(
+                    new_uids_desc, folder, limit=500
+                )
                 max_uid = stored_uidnext
                 for uid, email_obj in emails.items():
                     params = _email_to_db_params(email_obj, folder)
