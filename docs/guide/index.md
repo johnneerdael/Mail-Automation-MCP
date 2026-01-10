@@ -133,7 +133,7 @@ See [Configuration](./configuration) for complete reference.
 
 1. [Configure your server](./configuration) with Gmail settings
 2. Learn [Agent Patterns](./agents) for intelligent workflows  
-3. Explore the [MCP Tools Reference](/api/) for all available tools
+3. Explore the [MCP Tools Reference](/tools/) for all available tools
 4. Set up [Semantic Search](./semantic-search) for meaning-based email search
 
 ---
