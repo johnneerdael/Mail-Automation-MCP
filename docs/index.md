@@ -124,6 +124,23 @@ The AI:
 3. Parses and presents the total
 :::
 
+## What's New in v4.3.0
+
+**Gemini Embeddings & Provider Fallback**:
+
+- 🧠 **Google Gemini Provider**: Native `google-genai` SDK with `task_type` optimization
+- 🔄 **Automatic Fallback**: Switch providers on rate limit (Cohere → Gemini or vice versa)
+- 📊 **L2 Normalization**: Auto-normalizes Gemini vectors for dimensions ≠ 3072
+- 📖 **Detailed Guides**: Copy-paste configs with rate limits, sync time estimates, batch calculators
+
+| Provider | Free Tier Sync (25k emails) | Daily Capacity |
+|----------|----------------------------|----------------|
+| Cohere | ~31 min | 80k (1k calls/mo limit) |
+| Gemini | 2 days | 20k/day |
+| Combined (fallback) | ~31 min | 100k+ |
+
+See [Embeddings Guide](/embeddings/) for configuration details.
+
 ## What's New in v4.2.7
 
 **Gap Sync & Accurate Counters**:

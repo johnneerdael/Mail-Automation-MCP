@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-01-10
+
+### Added
+
+- **Google Gemini Embeddings Provider**: Native support via `google-genai` SDK
+  - `task_type` parameter for optimized retrieval (`RETRIEVAL_DOCUMENT`/`RETRIEVAL_QUERY`)
+  - Automatic L2 normalization for dimensions ≠ 3072 (Gemini quirk)
+  - Support for `gemini-embedding-001` and `text-embedding-004` models
+  - Configurable dimensions: 768, 1536, or 3072 (MRL support)
+- **Provider Fallback System**: Automatic failover when primary provider hits rate limits
+  - `FallbackEmbeddingsClient` wraps multiple providers
+  - 60-second cooldown per provider after 429 error
+  - Seamless switching between Cohere → Gemini or vice versa
+- **Comprehensive Embeddings Documentation**:
+  - Model defaults table with rate limits for all providers
+  - Copy-paste configurations for each tier (free/paid)
+  - Sync time estimates for 25k email mailboxes
+  - Batch size calculator formula
+  - Dimension matching warnings for fallback configs
+
+### Changed
+
+- **Cohere Rate Limiter Fix**: No longer triggers before first API call
+  - `_minute_start` initialized to `None`, only tracks after first request
+  - Prevents false rate limiting on startup
+- **Config Schema Extended**: New fields for Gemini support
+  - `fallback_provider`: Optional secondary provider
+  - `gemini_api_key`: Separate API key for Gemini
+  - `gemini_model`: Model selection (`gemini-embedding-001` default)
+  - `task_type`: Gemini task type for retrieval optimization
+
+### Documentation
+
+- **Embeddings Guide**: Added `/embeddings/` section to VitePress docs
+  - Provider comparison with rate limits
+  - Recommended configurations per tier
+  - Troubleshooting common issues
+- **Web Server Guide**: Added `/webserver/` section with API reference
+
 ## [4.2.7] - 2026-01-10
 
 ### Fixed
