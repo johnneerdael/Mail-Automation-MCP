@@ -124,6 +124,14 @@ The AI:
 3. Parses and presents the total
 :::
 
+## What's New in v4.2.4
+
+**Parallel Sync & Smart Scheduling**:
+
+- ⚡ **Parallel Folder Sync**: Up to 5 concurrent IMAP connections via connection pool
+- 🔄 **IDLE + Catch-up Strategy**: Real-time INBOX push, 30-min periodic catch-up for other folders
+- 🎛️ **Configurable**: `MAX_SYNC_CONNECTIONS` and `SYNC_CATCHUP_INTERVAL` env vars
+
 ## What's New in v4.2.3
 
 **Fix for IDLE Blocking Issues**:

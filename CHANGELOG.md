@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.4] - 2026-01-10
+
+### Added
+
+- **Parallel Folder Sync**: Sync multiple folders simultaneously using IMAP connection pool
+  - Up to 5 concurrent connections (configurable via `MAX_SYNC_CONNECTIONS`)
+  - Each folder syncs on its own connection from the pool
+  - Initial sync completes much faster for accounts with multiple folders
+
+### Changed
+
+- **Sync Strategy Overhaul**: Replaced fixed-interval polling with IDLE + catch-up
+  - Initial sync: parallel sync all folders at startup
+  - Real-time: IDLE push notifications for INBOX (dedicated thread)
+  - Catch-up: periodic sync every 30 min (configurable via `SYNC_CATCHUP_INTERVAL`)
+  - Removed old 5-minute polling interval
+
+### Fixed
+
+- **Connection Pool Lifecycle**: Proper shutdown of sync connections on engine stop
+
 ## [4.2.3] - 2026-01-10
 
 ### Fixed
