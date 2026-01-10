@@ -250,10 +250,10 @@ LLM_API_BASE=https://api.openai.com/v1
 LLM_API_KEY=sk-your-key
 LLM_MODEL=gpt-4o
 
-# Optional: Semantic Search
-EMBEDDINGS_PROVIDER=cohere
-EMBEDDINGS_API_KEY=your-cohere-key
-EMBEDDINGS_MODEL=embed-v4.0
+# Optional: Semantic Search (Gemini recommended)
+EMBEDDINGS_PROVIDER=gemini
+EMBEDDINGS_API_KEY=your-gemini-api-key
+EMBEDDINGS_MODEL=text-embedding-004
 
 # Optional: Server settings
 WEB_HOST=0.0.0.0
@@ -276,10 +276,10 @@ services:
       - LLM_API_BASE=https://api.openai.com/v1
       - LLM_API_KEY=${OPENAI_API_KEY}
       - LLM_MODEL=gpt-4o
-      # Semantic Search
-      - EMBEDDINGS_PROVIDER=cohere
-      - EMBEDDINGS_API_KEY=${COHERE_API_KEY}
-      - EMBEDDINGS_MODEL=embed-v4.0
+      # Semantic Search (Gemini recommended)
+      - EMBEDDINGS_PROVIDER=gemini
+      - EMBEDDINGS_API_KEY=${GEMINI_API_KEY}
+      - EMBEDDINGS_MODEL=text-embedding-004
     command: ["web", "--config", "/app/config/config.yaml"]
     depends_on:
       - postgres

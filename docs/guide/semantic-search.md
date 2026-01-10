@@ -72,7 +72,7 @@ volumes:
 
 ### 2. Configure Embeddings
 
-Update `config.yaml`:
+Update `config.yaml` (Gemini recommended):
 
 ```yaml
 database:
@@ -88,11 +88,12 @@ database:
   
   embeddings:
     enabled: true
-    endpoint: https://api.openai.com/v1/embeddings
-    model: text-embedding-3-small
-    api_key: ${OPENAI_API_KEY}
-    dimensions: 1536        # Match your model's output
-    batch_size: 100         # Emails per API call
+    provider: gemini
+    gemini_api_key: ${GEMINI_API_KEY}
+    gemini_model: text-embedding-004
+    dimensions: 3072        # 768, 1536, or 3072 available
+    batch_size: 100         # Texts per API call
+    task_type: RETRIEVAL_DOCUMENT
 ```
 
 ### 3. Alternative Embeddings Providers
@@ -126,7 +127,7 @@ embeddings:
 
 ### 4. Cohere (Native SDK)
 
-Cohere's embed-v4 model offers a 1.28M token context window and optimized retrieval via `input_type` parameter. The native SDK is recommended over OpenAI-compatible endpoints.
+Cohere's embed-v4 model offers a 1.28M token context window and optimized retrieval via `input_type` parameter.
 
 ```yaml
 embeddings:
@@ -137,7 +138,6 @@ embeddings:
   input_type: search_document
   dimensions: 1536
   batch_size: 96
-  max_chars: 500000
 ```
 
 **Configuration options:**
@@ -148,14 +148,13 @@ embeddings:
 | `model` | - | `embed-v4.0` recommended |
 | `input_type` | `search_document` | Used for indexing emails |
 | `batch_size` | `96` | Cohere's max per API call |
-| `max_chars` | `500000` | Truncation limit (model supports 1.28M tokens) |
 | `truncate` | `END` | Server-side truncation: `NONE`, `START`, `END` |
 
 ::: tip Automatic Query Optimization
 When searching, the system automatically switches to `input_type: search_query` for better retrieval accuracy. You don't need to configure this—just set `search_document` for indexing.
 :::
 
-**Free tier**: Same rate limits as paid for text embeddings (2,000 inputs/min). Only image embeddings differ (5 vs 400/min).
+**Free tier**: 1,000 API calls/month limit. Consider Gemini for higher free tier limits.
 
 ## Available Tools
 
@@ -252,8 +251,8 @@ Use this to troubleshoot if semantic search isn't working.
 
 ### Similarity Search
 
-1. **Query embedding**: Your search query is converted to a vector
-2. **Cosine similarity**: pgvector computes `1 - (query <=> stored)` for all emails
+1. **Query embedding**: Your search query is converted to a vector (with `task_type: RETRIEVAL_QUERY` for Gemini)
+2. **Inner product similarity**: pgvector computes `-(query <#> stored)` for L2-normalized vectors
 3. **Threshold filter**: Only results above `similarity_threshold` returned
 4. **HNSW index**: Approximate nearest neighbor for fast search at scale
 
@@ -281,9 +280,9 @@ CREATE TABLE email_embeddings (
     PRIMARY KEY (email_uid, email_folder)
 );
 
--- HNSW index for fast similarity search
+-- HNSW index for fast similarity search (inner product for L2-normalized vectors)
 CREATE INDEX idx_embeddings_vector
-ON email_embeddings USING hnsw (embedding vector_cosine_ops);
+ON email_embeddings USING hnsw (embedding vector_ip_ops);
 ```
 
 ## Agent Patterns

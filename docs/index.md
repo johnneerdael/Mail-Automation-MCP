@@ -133,11 +133,11 @@ The AI:
 - 📊 **L2 Normalization**: Auto-normalizes Gemini vectors for dimensions ≠ 3072
 - 📖 **Detailed Guides**: Copy-paste configs with rate limits, sync time estimates, batch calculators
 
-| Provider | Free Tier Sync (25k emails) | Daily Capacity |
+| Provider | Free Tier Sync (25k emails) | Paid Tier Sync |
 |----------|----------------------------|----------------|
-| Cohere | ~31 min | 80k (1k calls/mo limit) |
-| Gemini | 2 days | 20k/day |
-| Combined (fallback) | ~31 min | 100k+ |
+| Gemini Free | ~25 days (1k RPD limit) | N/A |
+| Gemini Tier 1 | N/A | ~17 minutes |
+| Cohere Trial | Limited (1k calls/month) | Varies by plan |
 
 See [Embeddings Guide](/embeddings/) for configuration details.
 

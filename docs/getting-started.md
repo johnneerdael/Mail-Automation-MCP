@@ -280,7 +280,7 @@ For AI-powered search by meaning:
 ```bash
 cat > .env << 'EOF'
 POSTGRES_PASSWORD=your-secure-password
-OPENAI_API_KEY=sk-your-openai-key
+GEMINI_API_KEY=your-gemini-api-key
 EOF
 
 docker compose -f docker-compose.postgres.yml up -d
@@ -299,13 +299,15 @@ database:
     password: ${POSTGRES_PASSWORD}
   embeddings:
     enabled: true
-    endpoint: https://api.openai.com/v1/embeddings
-    model: text-embedding-3-small
-    api_key: ${OPENAI_API_KEY}
-    dimensions: 1536
+    provider: gemini
+    gemini_api_key: ${GEMINI_API_KEY}
+    gemini_model: text-embedding-004
+    dimensions: 3072
+    batch_size: 100
+    task_type: RETRIEVAL_DOCUMENT
 ```
 
-See [Semantic Search Guide](/guide/semantic-search) for details.
+See [Semantic Search Guide](/guide/semantic-search) and [Embeddings Guide](/embeddings/) for details.
 
 ## Connecting AI Clients
 

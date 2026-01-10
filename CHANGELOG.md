@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-01-10
+
+### Fixed
+
+- **Embeddings Documentation Corrections**: Fixed inaccurate rate limit information
+  - Batching (`contents=[list]`) works on free tier (rate limit is per-text, not per-call)
+  - All dimensions (768/1536/3072) available on all tiers
+  - Corrected sync time estimates: Free tier ~25 days for 25k emails, Tier 1 ~17 minutes
+  - TaskType works with batch requests (confirmed via testing)
+
+### Changed
+
+- **Default Embeddings Provider**: All documentation now recommends Gemini as default
+  - Updated getting-started.md, semantic-search.md, configuration.md, webserver/index.md
+  - OpenAI examples replaced with Gemini examples
+- **Database Index**: Documentation updated to reflect HNSW with `vector_ip_ops` (inner product)
+
+### Removed
+
+- `gemini_tier` config option (unnecessary - batching works on all tiers)
+- `max_chars` references in Cohere config (misleading - uses tokens, not chars)
+
 ## [4.3.0] - 2026-01-10
 
 ### Added

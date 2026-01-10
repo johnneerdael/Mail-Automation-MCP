@@ -201,11 +201,12 @@ database:
   
   embeddings:
     enabled: true
-    endpoint: https://api.openai.com/v1/embeddings
-    model: text-embedding-3-small
-    api_key: ${OPENAI_API_KEY}
-    dimensions: 1536
+    provider: gemini
+    gemini_api_key: ${GEMINI_API_KEY}
+    gemini_model: text-embedding-004
+    dimensions: 3072
     batch_size: 100
+    task_type: RETRIEVAL_DOCUMENT
 ```
 
 **When to use PostgreSQL:**
@@ -213,7 +214,7 @@ database:
 - Want `find_related_emails` for context gathering
 - Multi-instance deployments with shared database
 
-See [Semantic Search](./semantic-search) for complete setup guide.
+See [Semantic Search](./semantic-search) and [Embeddings Guide](/embeddings/) for complete setup.
 
 ## Optional Fields
 

@@ -1,6 +1,6 @@
 # Gmail Secretary
 
-[![Version](https://img.shields.io/badge/version-4.2.0-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
+[![Version](https://img.shields.io/badge/version-4.3.0-blue.svg)](https://github.com/johnneerdael/Google-Workspace-Secretary-MCP/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![RFC Compliant](https://img.shields.io/badge/RFC-IMAP4rev1%20%7C%20CONDSTORE%20%7C%20IDLE-green.svg)](#-rfc-compliance)
 
