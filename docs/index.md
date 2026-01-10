@@ -124,6 +124,18 @@ The AI:
 3. Parses and presents the total
 :::
 
+## What's New in v4.2.3
+
+**Fix for IDLE Blocking Issues**:
+
+- Threaded IDLE Operation:
+  - Moved `idle_start`, `idle_done`, `idle_check` to a dedicated thread.
+  - Prevents event loop blocking during IMAP IDLE.
+- Event-loop Safe Communication:
+  - Uses `loop.call_soon_threadsafe()` for updates.
+- Updated Documentation:
+  - Added architecture section for threaded IDLE pattern.
+
 ## What's New in v4.2.2
 
 **Bug Fixes & Documentation Overhaul**:

@@ -3,18 +3,20 @@ import logging
 import os
 import smtplib
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from queue import Queue, Empty
 from typing import Any, Optional, TYPE_CHECKING, cast
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
-from workspace_secretary.config import load_config, ServerConfig
+from workspace_secretary.config import load_config, ServerConfig, ImapConfig
 from workspace_secretary.engine.imap_sync import ImapClient
 from workspace_secretary.engine.calendar_sync import CalendarClient
 from workspace_secretary.engine.database import DatabaseInterface, create_database
@@ -23,6 +25,8 @@ if TYPE_CHECKING:
     from workspace_secretary.models import Email
 
 logger = logging.getLogger(__name__)
+
+MAX_SYNC_CONNECTIONS = int(os.environ.get("MAX_SYNC_CONNECTIONS", "5"))
 
 SOCKET_PATH = os.environ.get("ENGINE_SOCKET", "/tmp/secretary-engine.sock")
 
@@ -58,6 +62,9 @@ class EngineState:
         self._sync_debounce_delay: float = 2.0
         self._embeddings_consecutive_failures: int = 0
         self._embeddings_cooldown_until: Optional[datetime] = None
+        self._sync_executor: Optional[ThreadPoolExecutor] = None
+        self._imap_pool: Queue[ImapClient] = Queue()
+        self._imap_pool_size: int = 0
 
 
 state = EngineState()
@@ -347,6 +354,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down secretary-engine...")
     state.running = False
 
+    _shutdown_connection_pool()
+
     if state.sync_task:
         state.sync_task.cancel()
         try:
@@ -363,6 +372,9 @@ async def lifespan(app: FastAPI):
 
     if state.imap_client:
         state.imap_client.disconnect()
+
+    if state.idle_client:
+        state.idle_client.disconnect()
 
     if Path(SOCKET_PATH).exists():
         Path(SOCKET_PATH).unlink()
@@ -414,9 +426,15 @@ async def embeddings_loop():
 
 
 async def sync_loop():
-    """Background sync loop for email and calendar."""
-    sync_interval = int(os.environ.get("SYNC_INTERVAL", "300"))
-    logger.info(f"Sync loop started, interval={sync_interval}s")
+    """Background sync loop for email and calendar.
+
+    - Initial sync: parallel folder sync for all folders
+    - After initial: IDLE handles INBOX push, periodic sync (30 min) catches non-INBOX folders and missed updates
+    """
+    catchup_interval = int(
+        os.environ.get("SYNC_CATCHUP_INTERVAL", "1800")
+    )  # 30 min default
+    logger.info("Sync loop started")
 
     if state.idle_client and state.idle_client.has_idle_capability():
         state.idle_task = asyncio.create_task(idle_monitor())
@@ -425,20 +443,215 @@ async def sync_loop():
         logger.info("Starting embeddings background task")
         state.embeddings_task = asyncio.create_task(embeddings_loop())
 
+    initial_sync_done = False
+
     while state.running:
         try:
-            if state.database and state.imap_client:
-                logger.info("Running email sync...")
-                await sync_emails()
+            if state.database and state.config:
+                if not initial_sync_done:
+                    logger.info("Running initial parallel sync...")
+                    await sync_emails_parallel()
+                    initial_sync_done = True
+                    logger.info(
+                        f"Initial sync complete. IDLE active for INBOX, catch-up every {catchup_interval}s"
+                    )
+                else:
+                    logger.debug("Running periodic catch-up sync...")
+                    await sync_emails_parallel()
         except Exception as e:
             logger.error(f"Sync error: {e}")
 
-        await asyncio.sleep(sync_interval)
+        if initial_sync_done:
+            await asyncio.sleep(catchup_interval)
+        else:
+            await asyncio.sleep(5)
 
 
-async def sync_emails():
-    """Async wrapper for synchronous sync_emails_sync to avoid blocking event loop."""
-    await asyncio.get_event_loop().run_in_executor(None, sync_emails_sync)
+def _init_connection_pool():
+    """Initialize the IMAP connection pool for parallel sync."""
+    if not state.config:
+        return
+
+    pool_size = min(
+        MAX_SYNC_CONNECTIONS, len(state.config.allowed_folders or ["INBOX"])
+    )
+    state._sync_executor = ThreadPoolExecutor(
+        max_workers=pool_size, thread_name_prefix="imap-sync"
+    )
+
+    for i in range(pool_size):
+        try:
+            client = ImapClient(
+                state.config.imap,
+                allowed_folders=state.config.allowed_folders,
+            )
+            client.connect()
+            state._imap_pool.put(client)
+            state._imap_pool_size += 1
+            logger.debug(f"Created sync connection {i + 1}/{pool_size}")
+        except Exception as e:
+            logger.error(f"Failed to create sync connection {i + 1}: {e}")
+
+    logger.info(
+        f"IMAP connection pool initialized with {state._imap_pool_size} connections"
+    )
+
+
+def _shutdown_connection_pool():
+    """Shutdown the IMAP connection pool."""
+    if state._sync_executor:
+        state._sync_executor.shutdown(wait=False)
+        state._sync_executor = None
+
+    while not state._imap_pool.empty():
+        try:
+            client = state._imap_pool.get_nowait()
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+        except Empty:
+            break
+
+    state._imap_pool_size = 0
+    logger.info("IMAP connection pool shutdown")
+
+
+def _sync_folder_worker(folder: str) -> int:
+    """Sync a single folder using a connection from the pool.
+
+    Returns the number of emails synced.
+    """
+    if not state.database or not state.config:
+        return 0
+
+    try:
+        client = state._imap_pool.get(timeout=60)
+    except Empty:
+        logger.warning(f"No available connection for folder {folder}")
+        return 0
+
+    try:
+        return _sync_single_folder(client, folder)
+    finally:
+        state._imap_pool.put(client)
+
+
+def _sync_single_folder(client: ImapClient, folder: str) -> int:
+    """Sync a single folder with the given client. Returns emails synced."""
+    if not state.database:
+        return 0
+
+    try:
+        folder_state = state.database.get_folder_state(folder)
+        folder_info = client.select_folder(folder, readonly=True)
+
+        current_uidvalidity = folder_info.get("uidvalidity", 0)
+        current_highestmodseq = folder_info.get("highestmodseq", 0)
+
+        stored_uidvalidity = folder_state.get("uidvalidity", 0) if folder_state else 0
+        stored_highestmodseq = (
+            folder_state.get("highestmodseq", 0) if folder_state else 0
+        )
+        stored_uidnext = folder_state.get("uidnext", 1) if folder_state else 1
+
+        if stored_uidvalidity != current_uidvalidity and stored_uidvalidity != 0:
+            logger.warning(f"UIDVALIDITY changed for {folder}, clearing cache")
+            state.database.clear_folder(folder)
+            stored_uidnext = 1
+            stored_highestmodseq = 0
+
+        has_condstore = client.has_condstore_capability()
+
+        if (
+            has_condstore
+            and stored_highestmodseq > 0
+            and current_highestmodseq == stored_highestmodseq
+        ):
+            logger.debug(f"HIGHESTMODSEQ unchanged for {folder}, skipping sync")
+            return 0
+
+        if has_condstore and stored_highestmodseq > 0:
+            changed = client.fetch_changed_since(folder, stored_highestmodseq)
+            for uid, data in changed.items():
+                state.database.update_email_flags(
+                    uid=uid,
+                    folder=folder,
+                    flags=",".join(data["flags"]),
+                    is_unread="\\Seen" not in data["flags"],
+                    modseq=data["modseq"],
+                    gmail_labels=data.get("gmail_labels"),
+                )
+            if changed:
+                logger.info(f"Updated flags for {len(changed)} emails in {folder}")
+
+        uids = client.search(f"UID {stored_uidnext}:*", folder=folder)
+        new_uids = [uid for uid in uids if uid >= stored_uidnext]
+
+        total_synced = 0
+        if new_uids:
+            new_uids_desc = sorted(new_uids, reverse=True)
+
+            for i in range(0, len(new_uids_desc), 500):
+                batch = new_uids_desc[i : i + 500]
+                emails = client.fetch_emails(batch, folder, limit=500)
+                for uid, email_obj in emails.items():
+                    params = _email_to_db_params(email_obj, folder)
+                    state.database.upsert_email(**params)
+                total_synced += len(emails)
+                if len(new_uids_desc) > 500:
+                    logger.info(
+                        f"Synced {total_synced}/{len(new_uids_desc)} emails from {folder}"
+                    )
+
+            max_uid = max(new_uids)
+            logger.info(f"Synced {total_synced} new emails from {folder}")
+        else:
+            max_uid = stored_uidnext - 1
+
+        state.database.save_folder_state(
+            folder=folder,
+            uidvalidity=current_uidvalidity,
+            uidnext=max_uid + 1,
+            highestmodseq=current_highestmodseq,
+        )
+
+        return total_synced
+
+    except Exception as e:
+        logger.error(f"Error syncing folder {folder}: {e}")
+        return 0
+
+
+async def sync_emails_parallel():
+    """Sync all folders in parallel using the connection pool."""
+    if not state.database or not state.config:
+        return
+
+    if state._imap_pool_size == 0:
+        _init_connection_pool()
+
+    folders = state.config.allowed_folders or ["INBOX"]
+    loop = asyncio.get_event_loop()
+
+    tasks = [
+        loop.run_in_executor(state._sync_executor, _sync_folder_worker, folder)
+        for folder in folders
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    total = sum(r for r in results if isinstance(r, int))
+    errors = [r for r in results if isinstance(r, Exception)]
+
+    if errors:
+        for e in errors:
+            logger.error(f"Folder sync error: {e}")
+
+    if total > 0:
+        logger.info(
+            f"Parallel sync complete: {total} emails across {len(folders)} folders"
+        )
 
 
 def _email_to_db_params(email_obj: "Email", folder: str) -> dict[str, Any]:
@@ -479,98 +692,6 @@ def _email_to_db_params(email_obj: "Email", folder: str) -> dict[str, Any]:
         "has_attachments": email_obj.has_attachments,
         "attachment_filenames": email_obj.attachment_filenames,
     }
-
-
-def sync_emails_sync():
-    """Sync emails from IMAP to database using CONDSTORE when available."""
-    if not state.database or not state.imap_client:
-        return
-
-    folders = ["INBOX"]
-    if state.config and state.config.allowed_folders:
-        folders = state.config.allowed_folders
-
-    has_condstore = state.imap_client.has_condstore_capability()
-
-    for folder in folders:
-        try:
-            folder_state = state.database.get_folder_state(folder)
-            folder_info = state.imap_client.select_folder(folder, readonly=True)
-
-            current_uidvalidity = folder_info.get("uidvalidity", 0)
-            current_highestmodseq = folder_info.get("highestmodseq", 0)
-
-            stored_uidvalidity = (
-                folder_state.get("uidvalidity", 0) if folder_state else 0
-            )
-            stored_highestmodseq = (
-                folder_state.get("highestmodseq", 0) if folder_state else 0
-            )
-            stored_uidnext = folder_state.get("uidnext", 1) if folder_state else 1
-
-            if stored_uidvalidity != current_uidvalidity and stored_uidvalidity != 0:
-                logger.warning(f"UIDVALIDITY changed for {folder}, clearing cache")
-                state.database.clear_folder(folder)
-                stored_uidnext = 1
-                stored_highestmodseq = 0
-
-            if (
-                has_condstore
-                and stored_highestmodseq > 0
-                and current_highestmodseq == stored_highestmodseq
-            ):
-                logger.debug(f"HIGHESTMODSEQ unchanged for {folder}, skipping sync")
-                continue
-
-            if has_condstore and stored_highestmodseq > 0:
-                changed = state.imap_client.fetch_changed_since(
-                    folder, stored_highestmodseq
-                )
-                for uid, data in changed.items():
-                    state.database.update_email_flags(
-                        uid=uid,
-                        folder=folder,
-                        flags=",".join(data["flags"]),
-                        is_unread="\\Seen" not in data["flags"],
-                        modseq=data["modseq"],
-                        gmail_labels=data.get("gmail_labels"),
-                    )
-                if changed:
-                    logger.info(f"Updated flags for {len(changed)} emails in {folder}")
-
-            uids = state.imap_client.search(f"UID {stored_uidnext}:*", folder=folder)
-            new_uids = [uid for uid in uids if uid >= stored_uidnext]
-
-            if new_uids:
-                new_uids_desc = sorted(new_uids, reverse=True)
-                total_synced = 0
-
-                for i in range(0, len(new_uids_desc), 500):
-                    batch = new_uids_desc[i : i + 500]
-                    emails = state.imap_client.fetch_emails(batch, folder, limit=500)
-                    for uid, email_obj in emails.items():
-                        params = _email_to_db_params(email_obj, folder)
-                        state.database.upsert_email(**params)
-                    total_synced += len(emails)
-                    if len(new_uids_desc) > 500:
-                        logger.info(
-                            f"Synced {total_synced}/{len(new_uids_desc)} emails from {folder}"
-                        )
-
-                max_uid = max(new_uids)
-                logger.info(f"Synced {total_synced} new emails from {folder}")
-            else:
-                max_uid = stored_uidnext - 1
-
-            state.database.save_folder_state(
-                folder=folder,
-                uidvalidity=current_uidvalidity,
-                uidnext=max_uid + 1,
-                highestmodseq=current_highestmodseq,
-            )
-
-        except Exception as e:
-            logger.error(f"Error syncing folder {folder}: {e}")
 
 
 async def generate_embeddings() -> int:
@@ -731,7 +852,7 @@ async def debounced_sync():
 
     async def _delayed_sync():
         await asyncio.sleep(state._sync_debounce_delay)
-        await sync_emails()
+        await sync_emails_parallel()
 
     state._sync_debounce_task = asyncio.create_task(_delayed_sync())
 
@@ -807,7 +928,7 @@ async def trigger_sync():
         return {"status": "error", "message": "Engine not ready"}
 
     try:
-        await sync_emails()
+        await sync_emails_parallel()
         return {"status": "ok", "message": "Sync triggered"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
