@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 MAX_SYNC_CONNECTIONS = int(os.environ.get("MAX_SYNC_CONNECTIONS", "5"))
 
 SOCKET_PATH = os.environ.get("ENGINE_SOCKET", "/tmp/secretary-engine.sock")
@@ -65,6 +67,9 @@ class EngineState:
         self._sync_executor: Optional[ThreadPoolExecutor] = None
         self._imap_pool: Queue[ImapClient] = Queue()
         self._imap_pool_size: int = 0
+        self._pool_init_lock: Optional[asyncio.Lock] = (
+            None  # Initialized lazily per event loop
+        )
 
 
 state = EngineState()
@@ -479,8 +484,11 @@ def _init_connection_pool():
         max_workers=pool_size, thread_name_prefix="imap-sync"
     )
 
+    logger.info(f"Creating {pool_size} IMAP connections for sync pool...")
+
     for i in range(pool_size):
         try:
+            logger.debug(f"Connecting sync connection {i + 1}/{pool_size}...")
             client = ImapClient(
                 state.config.imap,
                 allowed_folders=state.config.allowed_folders,
@@ -627,11 +635,22 @@ async def sync_emails_parallel():
     if not state.database or not state.config:
         return
 
+    if state._pool_init_lock is None:
+        state._pool_init_lock = asyncio.Lock()
+
     if state._imap_pool_size == 0:
-        _init_connection_pool()
+        async with state._pool_init_lock:
+            if state._imap_pool_size == 0:
+                logger.info("Initializing IMAP connection pool...")
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, _init_connection_pool)
+
+    if state._imap_pool_size == 0:
+        logger.error("No IMAP connections available after pool init")
+        return
 
     folders = state.config.allowed_folders or ["INBOX"]
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     tasks = [
         loop.run_in_executor(state._sync_executor, _sync_folder_worker, folder)

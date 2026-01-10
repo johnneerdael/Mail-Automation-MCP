@@ -196,6 +196,10 @@ class DatabaseInterface(ABC):
         """Get emails that don't have embeddings yet."""
         raise NotImplementedError("Embeddings not supported by this backend")
 
+    def count_emails_needing_embedding(self, folder: str) -> int:
+        """Count emails that don't have embeddings yet."""
+        raise NotImplementedError("Embeddings not supported by this backend")
+
 
 class SqliteDatabase(DatabaseInterface):
     """SQLite database backend with FTS5 for keyword search."""
@@ -1284,6 +1288,21 @@ class PostgresDatabase(DatabaseInterface):
                 )
                 columns = [desc[0] for desc in cur.description]
                 return [dict(zip(columns, row)) for row in cur.fetchall()]
+
+    def count_emails_needing_embedding(self, folder: str) -> int:
+        """Count emails that don't have embeddings yet."""
+        with self.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM emails e
+                    LEFT JOIN email_embeddings ee ON e.uid = ee.email_uid AND e.folder = ee.email_folder
+                    WHERE e.folder = %s 
+                      AND (ee.email_uid IS NULL OR ee.content_hash != e.content_hash)
+                    """,
+                    (folder,),
+                )
+                return cur.fetchone()[0]
 
 
 def create_database(config: Any) -> DatabaseInterface:

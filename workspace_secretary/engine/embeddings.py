@@ -39,6 +39,7 @@ class EmbeddingsClient:
         dimensions: int = 1536,
         batch_size: int = 100,
         timeout: float = 30.0,
+        max_concurrent: int = 4,
     ):
         """Initialize embeddings client.
 
@@ -49,6 +50,7 @@ class EmbeddingsClient:
             dimensions: Expected embedding dimensions
             batch_size: Maximum texts per batch request
             timeout: Request timeout in seconds
+            max_concurrent: Maximum concurrent embedding requests
         """
         self.endpoint = endpoint.rstrip("/")
         self.model = model
@@ -56,12 +58,15 @@ class EmbeddingsClient:
         self.dimensions = dimensions
         self.batch_size = batch_size
         self.timeout = timeout
+        self.max_concurrent = max_concurrent
 
-        # Ensure endpoint ends with /embeddings for OpenAI-compatible APIs
         if not self.endpoint.endswith("/embeddings"):
             self.embeddings_url = f"{self.endpoint}/embeddings"
         else:
             self.embeddings_url = self.endpoint
+
+        self._client: Optional[httpx.AsyncClient] = None
+        self._semaphore: Optional[asyncio.Semaphore] = None
 
     def _get_headers(self) -> dict[str, str]:
         """Get request headers."""
@@ -69,6 +74,21 @@ class EmbeddingsClient:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    def _get_semaphore(self) -> asyncio.Semaphore:
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self.max_concurrent)
+        return self._semaphore
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
     def _compute_hash(self, text: str) -> str:
         """Compute content hash for deduplication."""
@@ -152,7 +172,9 @@ class EmbeddingsClient:
         logger.debug(
             f"Requesting embeddings for {len(texts)} texts from {self.embeddings_url}"
         )
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+
+        async with self._get_semaphore():
+            client = await self._get_client()
             response = await client.post(
                 self.embeddings_url,
                 headers=self._get_headers(),
@@ -160,6 +182,7 @@ class EmbeddingsClient:
             )
             response.raise_for_status()
             data = response.json()
+
         logger.debug(
             f"Received embeddings response with {len(data.get('data', []))} vectors"
         )
@@ -246,20 +269,26 @@ class EmbeddingsSyncWorker:
             logger.warning("Database does not support embeddings")
             return 0
 
+        total_needing = self.database.count_emails_needing_embedding(folder)
         total_stored = 0
+        total_failed = 0
+
+        if total_needing == 0:
+            logger.debug(f"No emails need embedding in {folder}")
+            return 0
+
+        logger.info(f"[{folder}] Starting embeddings for {total_needing} emails")
+
         while True:
             emails = self.database.get_emails_needing_embedding(
                 folder, limit=self.batch_size
             )
 
             if not emails:
-                if total_stored > 0:
-                    logger.info(f"Embedded {total_stored} emails from {folder}")
-                else:
-                    logger.debug(f"No emails need embedding in {folder}")
+                logger.info(
+                    f"[{folder}] Embeddings complete: {total_stored} succeeded, {total_failed} failed"
+                )
                 return total_stored
-
-            logger.debug(f"Embedding batch of {len(emails)} emails from {folder}")
 
             try:
                 results = await self.client.embed_emails(emails)
@@ -283,9 +312,17 @@ class EmbeddingsSyncWorker:
                     )
                     total_stored += 1
                 except Exception as e:
+                    total_failed += 1
                     logger.error(
                         f"Failed to store embedding for UID {email['uid']}: {e}"
                     )
+
+            if (total_stored + total_failed) % 200 == 0 or (
+                total_stored + total_failed
+            ) == total_needing:
+                logger.info(
+                    f"[{folder}] {total_stored + total_failed}/{total_needing} embeddings processed ({total_stored} ok, {total_failed} failed)"
+                )
 
     async def sync_all_folders(self) -> int:
         """Sync embeddings for all configured folders.
