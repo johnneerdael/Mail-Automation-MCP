@@ -907,7 +907,11 @@ async def initial_lockstep_sync_and_embed():
     for folder in folders:
         folder_synced = 0
         folder_embedded = 0
-        cursor_uid = 0
+
+        folder_state = state.database.get_folder_state(folder)
+        stored_uidnext = folder_state.get("uidnext", 1) if folder_state else 1
+        cursor_uid = stored_uidnext - 1 if stored_uidnext > 1 else 0
+        already_synced = cursor_uid
 
         def _get_folder_count():
             try:
@@ -923,8 +927,14 @@ async def initial_lockstep_sync_and_embed():
         folder_total = await loop.run_in_executor(
             state._sync_executor, _get_folder_count
         )
+
+        remaining = folder_total - already_synced
+        if remaining <= 0:
+            logger.info(f"[{folder}] Already fully synced ({folder_total} emails)")
+            continue
+
         logger.info(
-            f"[{folder}] Starting lockstep sync+embed ({folder_total} emails)..."
+            f"[{folder}] Resuming lockstep sync+embed ({already_synced}/{folder_total} done, {remaining} remaining)..."
         )
 
         while state.running:
@@ -948,10 +958,9 @@ async def initial_lockstep_sync_and_embed():
 
             folder_synced += len(synced_uids)
             cursor_uid = next_cursor
-            pct = (folder_synced / folder_total * 100) if folder_total > 0 else 0
-            logger.info(
-                f"[{folder}] Synced {folder_synced}/{folder_total} ({pct:.1f}%)"
-            )
+            total_done = already_synced + folder_synced
+            pct = (total_done / folder_total * 100) if folder_total > 0 else 0
+            logger.info(f"[{folder}] Synced {total_done}/{folder_total} ({pct:.1f}%)")
 
             if supports_embeddings:
                 embedded = await embed_specific_uids(folder, synced_uids)
