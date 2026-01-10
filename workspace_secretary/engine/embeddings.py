@@ -340,7 +340,7 @@ class EmbeddingsSyncWorker:
                         email_folder=email["folder"],
                         embedding=result.embedding,
                         model=result.model,
-                        content_hash=result.content_hash,
+                        content_hash=email["content_hash"],
                     )
                     total_stored += 1
                 except Exception as e:
