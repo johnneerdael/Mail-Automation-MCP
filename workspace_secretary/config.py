@@ -389,13 +389,9 @@ class EmbeddingsConfig:
     input_type: str = "search_document"  # Cohere: search_document | search_query
     truncate: str = "END"  # Cohere: NONE | START | END
     # Gemini-specific options
-    gemini_api_key: str = ""  # API key for Gemini provider
-    gemini_model: str = (
-        "text-embedding-004"  # text-embedding-004 | gemini-embedding-001
-    )
-    task_type: str = (
-        "RETRIEVAL_DOCUMENT"  # Gemini: RETRIEVAL_DOCUMENT | RETRIEVAL_QUERY
-    )
+    gemini_api_key: str = ""
+    gemini_model: str = "text-embedding-004"
+    task_type: str = "RETRIEVAL_DOCUMENT"
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EmbeddingsConfig":
