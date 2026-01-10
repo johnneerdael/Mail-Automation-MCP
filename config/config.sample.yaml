@@ -161,3 +161,95 @@ database:
 # =============================================================================
 calendar:
   enabled: false  # Set to true to enable calendar tools
+
+# =============================================================================
+# OPTIONAL: Web UI Configuration
+# =============================================================================
+# The web UI provides a browser-based email client with AI assistance.
+# Run with: python -m workspace_secretary.web.main
+#
+# web:
+#   # ---------------------------------------------------------------------------
+#   # Theme
+#   # ---------------------------------------------------------------------------
+#   theme: dark  # Options: "dark", "light", "system"
+#
+#   # ---------------------------------------------------------------------------
+#   # AI Agent Configuration (for smart replies, summarization, etc.)
+#   # ---------------------------------------------------------------------------
+#   # Uses any OpenAI-compatible chat API.
+#   #
+#   # agent:
+#   #   base_url: https://api.openai.com/v1
+#   #   api_format: openai.chat  # Options: openai.chat, openai.responses, anthropic.chat
+#   #   model: gpt-4o
+#   #   token_limit: 128000
+#   #   api_key: ${WEB_AGENT_API_KEY}
+#   #
+#   # Alternative providers:
+#   #
+#   # Anthropic Claude:
+#   #   base_url: https://api.anthropic.com/v1
+#   #   api_format: anthropic.chat
+#   #   model: claude-sonnet-4-20250514
+#   #   token_limit: 200000
+#   #   api_key: ${ANTHROPIC_API_KEY}
+#   #
+#   # Azure OpenAI:
+#   #   base_url: https://your-resource.openai.azure.com/openai/deployments/your-deployment
+#   #   api_format: openai.chat
+#   #   model: gpt-4o
+#   #   api_key: ${AZURE_OPENAI_KEY}
+#   #
+#   # Local Ollama:
+#   #   base_url: http://localhost:11434/v1
+#   #   api_format: openai.chat
+#   #   model: llama3.1
+#   #   token_limit: 8192
+#   #   api_key: ""  # Ollama doesn't need a key
+#
+#   # ---------------------------------------------------------------------------
+#   # Authentication
+#   # ---------------------------------------------------------------------------
+#   # Secure your web UI. Options: none, password, oidc, saml2
+#   #
+#   # auth:
+#   #   method: none  # No authentication (development only!)
+#   #
+#   # --- Password Authentication (single user) ---
+#   # Generate a hash:
+#   #   Python argon2:  python -c "from argon2 import PasswordHasher; print(PasswordHasher().hash('your-password'))"
+#   #   Python bcrypt:  python -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"
+#   #
+#   # auth:
+#   #   method: password
+#   #   password_hash: "$argon2id$v=19$m=65536,t=3,p=4$..."  # Or ${WEB_PASSWORD_HASH}
+#   #   session_secret: "generate-a-random-string-here"      # Or ${WEB_SESSION_SECRET}
+#   #   session_expiry_hours: 24
+#   #
+#   # --- OIDC Authentication (Google, Okta, Auth0, etc.) ---
+#   # auth:
+#   #   method: oidc
+#   #   session_secret: ${WEB_SESSION_SECRET}
+#   #   session_expiry_hours: 24
+#   #   oidc:
+#   #     provider_url: https://accounts.google.com  # Or your IdP
+#   #     client_id: "your-client-id.apps.googleusercontent.com"
+#   #     client_secret: ${OIDC_CLIENT_SECRET}
+#   #     scopes:
+#   #       - openid
+#   #       - profile
+#   #       - email
+#   #
+#   # --- SAML2 Authentication (Enterprise SSO) ---
+#   # auth:
+#   #   method: saml2
+#   #   session_secret: ${WEB_SESSION_SECRET}
+#   #   session_expiry_hours: 24
+#   #   saml2:
+#   #     idp_metadata_url: https://idp.example.com/metadata
+#   #     sp_entity_id: https://secretary.example.com
+#   #     sp_acs_url: https://secretary.example.com/auth/saml/acs
+#   #     sp_sls_url: https://secretary.example.com/auth/saml/sls
+#   #     certificate_file: /path/to/sp-cert.pem      # Optional
+#   #     private_key_file: /path/to/sp-key.pem       # Optional
