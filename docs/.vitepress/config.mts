@@ -18,7 +18,7 @@ export default defineConfig({
       { text: 'Embeddings', link: '/embeddings/' },
       { text: 'MCP Tools', link: '/tools/' },
       {
-        text: 'v4.3.0',
+        text: 'v4.4.0',
         items: [
           { text: 'Changelog', link: 'https://github.com/johnneerdael/gmail-secretary-mcp/releases' },
           { text: 'Contributing', link: 'https://github.com/johnneerdael/gmail-workspace-mcp' }

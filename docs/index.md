@@ -124,6 +124,28 @@ The AI:
 3. Parses and presents the total
 :::
 
+## What's New in v4.4.0
+
+**Web UI Configuration**:
+
+- 📝 **Config Documentation**: Added web UI configuration options to `config.sample.yaml`
+
+## What's New in v4.3.3
+
+**Phase 4 Dashboard**:
+
+- 📊 **Dashboard Stats**: Email statistics overview (total, unread, today's count)
+- ⚡ **Priority Queue**: Priority email list with quick actions
+- ⌨️ **Keyboard Shortcuts**: j/k navigation, o to open, r to reply
+
+## What's New in v4.3.2
+
+**halfvec Support for High Dimensions**:
+
+- 🧠 **Automatic Quantization**: 16-bit `halfvec` type for dimensions > 2000
+- 🔧 **HNSW Fix**: Resolves "column cannot have more than 2000 dimensions" error
+- 📉 **50% Storage Savings**: halfvec uses half the space with ~0.1% recall loss
+
 ## What's New in v4.3.0
 
 **Gemini Embeddings & Provider Fallback**:
