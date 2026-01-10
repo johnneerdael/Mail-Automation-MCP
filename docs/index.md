@@ -6,7 +6,7 @@ hero:
   text: "IMAP/SMTP Client for AI Agents"
   tagline: A production-grade Gmail client engineered for LLM orchestration with RFC-compliant CONDSTORE, IDLE, and native Gmail extensions
   image:
-    src: /hero-image.svg
+    src: /hero.jpeg
     alt: Gmail Secretary
   actions:
     - theme: brand
