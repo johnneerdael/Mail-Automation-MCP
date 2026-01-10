@@ -85,8 +85,8 @@ def get_template_context(request: Request, **kwargs) -> dict:
 
 @web_app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Redirect to dashboard."""
-    return RedirectResponse(url="/dashboard")
+    """Redirect to inbox (dashboard is served by dashboard router)."""
+    return RedirectResponse(url="/inbox")
 
 
 @web_app.get("/favicon.ico")
