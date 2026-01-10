@@ -124,6 +124,39 @@ embeddings:
   dimensions: 384
 ```
 
+### 4. Cohere (Native SDK)
+
+Cohere's embed-v4 model offers a 1.28M token context window and optimized retrieval via `input_type` parameter. The native SDK is recommended over OpenAI-compatible endpoints.
+
+```yaml
+embeddings:
+  enabled: true
+  provider: cohere
+  model: embed-v4.0
+  api_key: ${COHERE_API_KEY}
+  input_type: search_document
+  dimensions: 1536
+  batch_size: 96
+  max_chars: 500000
+```
+
+**Configuration options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `provider` | `openai_compat` | Set to `cohere` for native SDK |
+| `model` | - | `embed-v4.0` recommended |
+| `input_type` | `search_document` | Used for indexing emails |
+| `batch_size` | `96` | Cohere's max per API call |
+| `max_chars` | `500000` | Truncation limit (model supports 1.28M tokens) |
+| `truncate` | `END` | Server-side truncation: `NONE`, `START`, `END` |
+
+::: tip Automatic Query Optimization
+When searching, the system automatically switches to `input_type: search_query` for better retrieval accuracy. You don't need to configure this—just set `search_document` for indexing.
+:::
+
+**Free tier**: Same rate limits as paid for text embeddings (2,000 inputs/min). Only image embeddings differ (5 vs 400/min).
+
 ## Available Tools
 
 When semantic search is enabled, three additional tools become available:

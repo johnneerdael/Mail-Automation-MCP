@@ -103,6 +103,7 @@ Learn to build intelligent secretary workflows:
 - [Agent Patterns](./agents) - Morning Briefing, Triage, Scheduling patterns
 - [Use Cases](./use-cases) - Real-world examples
 - [Semantic Search](./semantic-search) - AI-powered email search with pgvector
+- [Web UI](./web-ui) - Browser-based inbox management
 
 ## Quick Reference
 
