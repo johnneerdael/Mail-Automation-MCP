@@ -536,23 +536,29 @@ async def sync_emails():
 
             if new_uids:
                 new_uids_desc = sorted(new_uids, reverse=True)
-                emails = state.imap_client.fetch_emails(
-                    new_uids_desc, folder, limit=500
-                )
-                max_uid = stored_uidnext
-                for uid, email_obj in emails.items():
-                    params = _email_to_db_params(email_obj, folder)
-                    state.database.upsert_email(**params)
-                    if uid > max_uid:
-                        max_uid = uid
-                logger.info(f"Synced {len(emails)} new emails from {folder}")
+                total_synced = 0
+
+                for i in range(0, len(new_uids_desc), 500):
+                    batch = new_uids_desc[i : i + 500]
+                    emails = state.imap_client.fetch_emails(batch, folder, limit=500)
+                    for uid, email_obj in emails.items():
+                        params = _email_to_db_params(email_obj, folder)
+                        state.database.upsert_email(**params)
+                    total_synced += len(emails)
+                    if len(new_uids_desc) > 500:
+                        logger.info(
+                            f"Synced {total_synced}/{len(new_uids_desc)} emails from {folder}"
+                        )
+
+                max_uid = max(new_uids)
+                logger.info(f"Synced {total_synced} new emails from {folder}")
             else:
-                max_uid = stored_uidnext
+                max_uid = stored_uidnext - 1
 
             state.database.save_folder_state(
                 folder=folder,
                 uidvalidity=current_uidvalidity,
-                uidnext=max_uid + 1 if new_uids else stored_uidnext,
+                uidnext=max_uid + 1,
                 highestmodseq=current_highestmodseq,
             )
 
