@@ -441,7 +441,7 @@ class CohereEmbeddingsClient:
         self.max_chars = max_chars
         self._closed = False
         self._tokens_used_this_minute = 0
-        self._minute_start = time.monotonic()
+        self._minute_start: Optional[float] = None
         self._rate_limit_lock = asyncio.Lock()
 
     def _estimate_tokens(self, texts: list[str]) -> int:
@@ -450,13 +450,19 @@ class CohereEmbeddingsClient:
     async def _wait_for_rate_limit(self, estimated_tokens: int) -> None:
         async with self._rate_limit_lock:
             now = time.monotonic()
+
+            if self._minute_start is None:
+                self._minute_start = now
+                self._tokens_used_this_minute = estimated_tokens
+                return
+
             elapsed = now - self._minute_start
             if elapsed >= 60:
-                self._tokens_used_this_minute = 0
+                self._tokens_used_this_minute = estimated_tokens
                 self._minute_start = now
-                elapsed = 0
+                return
 
-            if self._tokens_used_this_minute > 0 and (
+            if (
                 self._tokens_used_this_minute + estimated_tokens
                 > self.TOKENS_PER_MINUTE
             ):
@@ -465,10 +471,10 @@ class CohereEmbeddingsClient:
                     f"Rate limit approaching ({self._tokens_used_this_minute:,} tokens used), waiting {wait_time:.1f}s"
                 )
                 await asyncio.sleep(wait_time)
-                self._tokens_used_this_minute = 0
+                self._tokens_used_this_minute = estimated_tokens
                 self._minute_start = time.monotonic()
-
-            self._tokens_used_this_minute += estimated_tokens
+            else:
+                self._tokens_used_this_minute += estimated_tokens
 
     async def close(self) -> None:
         self._closed = True
@@ -527,7 +533,7 @@ class CohereEmbeddingsClient:
         estimated_tokens = self._estimate_tokens(filtered_texts)
         await self._wait_for_rate_limit(estimated_tokens)
 
-        max_retries = 3
+        max_retries = 5
         for attempt in range(max_retries):
             try:
                 response = self.client.embed(
@@ -540,13 +546,13 @@ class CohereEmbeddingsClient:
                 break
             except Exception as e:
                 if "429" in str(e) or "rate limit" in str(e).lower():
-                    wait_time = (2**attempt) * 15
+                    wait_time = (2**attempt) * 30
                     logger.warning(
-                        f"Rate limited, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                        f"Rate limited by API, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})"
                     )
                     await asyncio.sleep(wait_time)
                     self._tokens_used_this_minute = 0
-                    self._minute_start = time.monotonic()
+                    self._minute_start = None
                     if attempt == max_retries - 1:
                         logger.error(
                             f"Cohere embeddings API error after {max_retries} retries: {e}"
@@ -581,7 +587,6 @@ class CohereEmbeddingsClient:
         return await self.embed_texts(texts)
 
     async def embed_query(self, query: str) -> EmbeddingResult:
-        """Embed a search query using search_query input type for better retrieval."""
         original_input_type = self.input_type
         self.input_type = "search_query"
         try:
@@ -590,38 +595,365 @@ class CohereEmbeddingsClient:
             self.input_type = original_input_type
 
 
+class GeminiEmbeddingsClient:
+    """Native Google Gemini embeddings client with task_type support."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gemini-embedding-001",
+        dimensions: int = 768,
+        batch_size: int = 100,
+        task_type: str = "RETRIEVAL_DOCUMENT",
+        max_chars: int = 500000,
+    ):
+        try:
+            from google import genai
+        except ImportError:
+            raise ImportError("google-genai package required: pip install google-genai")
+
+        self.client = genai.Client(api_key=api_key)
+        self.model = model
+        self.dimensions = dimensions
+        self.batch_size = batch_size
+        self.task_type = task_type
+        self.max_chars = max_chars
+        self._closed = False
+
+    async def close(self) -> None:
+        self._closed = True
+
+    def _compute_hash(self, text: str) -> str:
+        return hashlib.sha256(text.encode()).hexdigest()[:32]
+
+    def _normalize(self, vec: list[float]) -> list[float]:
+        import math
+
+        norm = math.sqrt(sum(x * x for x in vec))
+        if norm == 0:
+            return vec
+        return [x / norm for x in vec]
+
+    def _prepare_text(self, subject: Optional[str], body: str) -> str:
+        parts = []
+        if subject:
+            parts.append(f"Subject: {subject}")
+        if body:
+            clean_body = " ".join(body.split())
+            parts.append(clean_body)
+        text = "\n".join(parts)
+        if len(text) > self.max_chars:
+            text = text[: self.max_chars]
+        return text
+
+    async def embed_text(self, text: str) -> EmbeddingResult:
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def embed_texts(self, texts: list[str]) -> list[EmbeddingResult]:
+        if not texts:
+            return []
+
+        results: list[EmbeddingResult] = []
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i : i + self.batch_size]
+            batch_results = await self._embed_batch(batch)
+            results.extend(batch_results)
+        return results
+
+    async def _embed_batch(self, texts: list[str]) -> list[EmbeddingResult]:
+        from google.genai import types
+
+        def is_valid_text(t: str) -> bool:
+            if not t or not t.strip():
+                return False
+            stripped = t.strip()
+            return len(stripped) >= 3 and any(c.isalnum() for c in stripped)
+
+        filtered_texts = [t.strip() for t in texts if is_valid_text(t)]
+        if not filtered_texts:
+            return [
+                EmbeddingResult(
+                    text=t if t else "",
+                    embedding=[],
+                    model=self.model,
+                    content_hash="",
+                    tokens_used=0,
+                )
+                for t in texts
+            ]
+
+        content_hashes = [self._compute_hash(t) for t in filtered_texts]
+
+        max_retries = 5
+        response = None
+        for attempt in range(max_retries):
+            try:
+                config = types.EmbedContentConfig(
+                    task_type=self.task_type,
+                    output_dimensionality=self.dimensions,
+                )
+                response = self.client.models.embed_content(
+                    model=self.model,
+                    contents=filtered_texts,
+                    config=config,
+                )
+                break
+            except Exception as e:
+                if (
+                    "429" in str(e)
+                    or "rate limit" in str(e).lower()
+                    or "quota" in str(e).lower()
+                ):
+                    wait_time = (2**attempt) * 30
+                    logger.warning(
+                        f"Rate limited by Gemini API, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})"
+                    )
+                    await asyncio.sleep(wait_time)
+                    if attempt == max_retries - 1:
+                        logger.error(
+                            f"Gemini embeddings API error after {max_retries} retries: {e}"
+                        )
+                        raise
+                else:
+                    logger.error(f"Gemini embeddings API error: {e}")
+                    raise
+
+        if response is None:
+            raise RuntimeError("Failed to get response from Gemini API")
+
+        results = []
+        for i, embedding in enumerate(response.embeddings):
+            vec = list(embedding.values)
+            if self.dimensions != 3072:
+                vec = self._normalize(vec)
+            results.append(
+                EmbeddingResult(
+                    text=filtered_texts[i],
+                    embedding=vec,
+                    model=self.model,
+                    content_hash=content_hashes[i],
+                    tokens_used=0,
+                )
+            )
+        return results
+
+    async def embed_email(self, subject: Optional[str], body: str) -> EmbeddingResult:
+        text = self._prepare_text(subject, body)
+        return await self.embed_text(text)
+
+    async def embed_emails(self, emails: list[dict[str, Any]]) -> list[EmbeddingResult]:
+        texts = [
+            self._prepare_text(e.get("subject"), e.get("body_text", "")) for e in emails
+        ]
+        return await self.embed_texts(texts)
+
+    async def embed_query(self, query: str) -> EmbeddingResult:
+        original_task_type = self.task_type
+        self.task_type = "RETRIEVAL_QUERY"
+        try:
+            return await self.embed_text(query)
+        finally:
+            self.task_type = original_task_type
+
+
+EmbeddingsClientType = (
+    EmbeddingsClient | CohereEmbeddingsClient | GeminiEmbeddingsClient
+)
+
+
+class FallbackEmbeddingsClient:
+    """Wrapper that tries multiple embedding providers with automatic failover."""
+
+    def __init__(self, clients: list[EmbeddingsClientType]):
+        if not clients:
+            raise ValueError("At least one embeddings client required")
+        self.clients = clients
+        self.current_index = 0
+        self._cooldowns: dict[int, float] = {}
+        self.dimensions = clients[0].dimensions
+        self.model = clients[0].model
+
+    def _get_available_client(self) -> tuple[int, EmbeddingsClientType]:
+        now = time.monotonic()
+        for _ in range(len(self.clients)):
+            idx = self.current_index
+            cooldown_until = self._cooldowns.get(idx, 0)
+            if now >= cooldown_until:
+                return idx, self.clients[idx]
+            self.current_index = (self.current_index + 1) % len(self.clients)
+
+        min_cooldown_idx = min(self._cooldowns, key=lambda k: self._cooldowns[k])
+        wait_time = self._cooldowns[min_cooldown_idx] - now
+        if wait_time > 0:
+            logger.info(f"All providers rate limited, shortest wait: {wait_time:.1f}s")
+        return min_cooldown_idx, self.clients[min_cooldown_idx]
+
+    def _mark_rate_limited(self, idx: int, cooldown_seconds: float = 60) -> None:
+        self._cooldowns[idx] = time.monotonic() + cooldown_seconds
+        self.current_index = (idx + 1) % len(self.clients)
+        logger.info(
+            f"Provider {idx} rate limited, switching to provider {self.current_index}"
+        )
+
+    async def close(self) -> None:
+        for client in self.clients:
+            await client.close()
+
+    async def embed_text(self, text: str) -> EmbeddingResult:
+        results = await self.embed_texts([text])
+        return results[0]
+
+    async def embed_texts(self, texts: list[str]) -> list[EmbeddingResult]:
+        last_error = None
+        for attempt in range(len(self.clients) * 2):
+            idx, client = self._get_available_client()
+            try:
+                return await client.embed_texts(texts)
+            except Exception as e:
+                if (
+                    "429" in str(e)
+                    or "rate limit" in str(e).lower()
+                    or "quota" in str(e).lower()
+                ):
+                    self._mark_rate_limited(idx, cooldown_seconds=60)
+                    last_error = e
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("All embedding providers failed")
+
+    async def embed_email(self, subject: Optional[str], body: str) -> EmbeddingResult:
+        last_error = None
+        for attempt in range(len(self.clients) * 2):
+            idx, client = self._get_available_client()
+            try:
+                return await client.embed_email(subject, body)
+            except Exception as e:
+                if (
+                    "429" in str(e)
+                    or "rate limit" in str(e).lower()
+                    or "quota" in str(e).lower()
+                ):
+                    self._mark_rate_limited(idx, cooldown_seconds=60)
+                    last_error = e
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("All embedding providers failed")
+
+    async def embed_emails(self, emails: list[dict[str, Any]]) -> list[EmbeddingResult]:
+        last_error = None
+        for attempt in range(len(self.clients) * 2):
+            idx, client = self._get_available_client()
+            try:
+                return await client.embed_emails(emails)
+            except Exception as e:
+                if (
+                    "429" in str(e)
+                    or "rate limit" in str(e).lower()
+                    or "quota" in str(e).lower()
+                ):
+                    self._mark_rate_limited(idx, cooldown_seconds=60)
+                    last_error = e
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("All embedding providers failed")
+
+    async def embed_query(self, query: str) -> EmbeddingResult:
+        last_error = None
+        for attempt in range(len(self.clients) * 2):
+            idx, client = self._get_available_client()
+            try:
+                return await client.embed_query(query)
+            except Exception as e:
+                if (
+                    "429" in str(e)
+                    or "rate limit" in str(e).lower()
+                    or "quota" in str(e).lower()
+                ):
+                    self._mark_rate_limited(idx, cooldown_seconds=60)
+                    last_error = e
+                    continue
+                raise
+
+        if last_error:
+            raise last_error
+        raise RuntimeError("All embedding providers failed")
+
+
 def create_embeddings_client(
     config: Any,
-) -> Optional[EmbeddingsClient | CohereEmbeddingsClient]:
+) -> Optional[EmbeddingsClientType | FallbackEmbeddingsClient]:
     if not config.enabled:
         return None
 
     provider = getattr(config, "provider", "openai_compat")
+    fallback_provider = getattr(config, "fallback_provider", None)
 
-    if provider == "cohere":
-        if not config.api_key:
-            logger.warning("Cohere embeddings enabled but no api_key configured")
+    def _create_single_client(prov: str, cfg: Any) -> Optional[EmbeddingsClientType]:
+        if prov == "cohere":
+            if not cfg.api_key:
+                logger.warning("Cohere embeddings enabled but no api_key configured")
+                return None
+            return CohereEmbeddingsClient(
+                api_key=cfg.api_key,
+                model=cfg.model,
+                dimensions=cfg.dimensions,
+                batch_size=cfg.batch_size,
+                input_type=getattr(cfg, "input_type", "search_document"),
+                truncate=getattr(cfg, "truncate", "END"),
+                max_chars=getattr(cfg, "max_chars", 500000),
+            )
+
+        if prov == "gemini":
+            api_key = getattr(cfg, "api_key", None) or getattr(
+                cfg, "gemini_api_key", None
+            )
+            if not api_key:
+                logger.warning("Gemini embeddings enabled but no api_key configured")
+                return None
+            return GeminiEmbeddingsClient(
+                api_key=api_key,
+                model=getattr(cfg, "gemini_model", cfg.model)
+                if hasattr(cfg, "gemini_model")
+                else cfg.model,
+                dimensions=cfg.dimensions,
+                batch_size=cfg.batch_size,
+                task_type=getattr(cfg, "task_type", "RETRIEVAL_DOCUMENT"),
+                max_chars=getattr(cfg, "max_chars", 500000),
+            )
+
+        if not cfg.endpoint:
+            logger.warning("Embeddings enabled but no endpoint configured")
             return None
-        return CohereEmbeddingsClient(
-            api_key=config.api_key,
-            model=config.model,
-            dimensions=config.dimensions,
-            batch_size=config.batch_size,
-            input_type=getattr(config, "input_type", "search_document"),
-            truncate=getattr(config, "truncate", "END"),
-            max_chars=getattr(config, "max_chars", 500000),
+
+        return EmbeddingsClient(
+            endpoint=cfg.endpoint,
+            model=cfg.model,
+            api_key=cfg.api_key,
+            dimensions=cfg.dimensions,
+            batch_size=cfg.batch_size,
+            max_chars=getattr(cfg, "max_chars", 500000),
         )
 
-    # Default: OpenAI-compatible
-    if not config.endpoint:
-        logger.warning("Embeddings enabled but no endpoint configured")
+    primary = _create_single_client(provider, config)
+    if not primary:
         return None
 
-    return EmbeddingsClient(
-        endpoint=config.endpoint,
-        model=config.model,
-        api_key=config.api_key,
-        dimensions=config.dimensions,
-        batch_size=config.batch_size,
-        max_chars=getattr(config, "max_chars", 500000),
-    )
+    if fallback_provider:
+        fallback = _create_single_client(fallback_provider, config)
+        if fallback:
+            logger.info(
+                f"Embeddings configured with failover: {provider} -> {fallback_provider}"
+            )
+            return FallbackEmbeddingsClient([primary, fallback])
+
+    return primary

@@ -7,7 +7,7 @@ Gmail Secretary supports AI-powered semantic search using vector embeddings. Ins
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Email Text    │────▶│ Embeddings API   │────▶│ Vector (1536d)  │
-│ "Meeting moved" │     │ (Cohere/OpenAI)  │     │ [0.12, -0.34,…] │
+│ "Meeting moved" │     │ (Cohere/Gemini)  │     │ [0.12, -0.34,…] │
 └─────────────────┘     └──────────────────┘     └─────────────────┘
                                                           │
                                                           ▼
@@ -20,7 +20,26 @@ Gmail Secretary supports AI-powered semantic search using vector embeddings. Ins
 ## Requirements
 
 - **PostgreSQL** with **pgvector** extension
-- **Embeddings API** (Cohere, OpenAI, or compatible)
+- **Embeddings API** (Cohere, Gemini, OpenAI, or compatible)
+
+## Model Defaults Reference
+
+Use this table to configure optimal settings for your provider:
+
+| Provider | Model | Dimensions | Batch Size | Max Chars | Rate Limits |
+|----------|-------|------------|------------|-----------|-------------|
+| **Cohere (trial)** | `embed-v4.0` | 1536 | 80 | 40000 | 100k tok/min, 1k calls/mo |
+| **Cohere (prod)** | `embed-v4.0` | 1536 | 96 | 500000 | 2k inputs/min |
+| **Gemini (free)** | `gemini-embedding-001` | 768 | 100 | 8000 | 100 RPM, 30k TPM, 1k RPD |
+| **Gemini (paid)** | `text-embedding-004` | 768-3072 | 100 | 8000 | 3k RPM, 1M TPM |
+| **OpenAI** | `text-embedding-3-small` | 1536 | 100 | 32000 | Varies by tier |
+| **OpenAI** | `text-embedding-3-large` | 3072 | 100 | 32000 | Varies by tier |
+
+::: tip Choosing Dimensions
+- **768**: Fastest, good for most use cases
+- **1536**: Balanced quality/performance (recommended)
+- **3072**: Highest quality, more storage, slower searches
+:::
 
 ## Quick Start
 
@@ -113,6 +132,64 @@ embeddings:
 The system automatically uses `input_type: search_query` when searching, improving retrieval accuracy. You only configure `search_document` for indexing.
 :::
 
+### Google Gemini
+
+Native SDK with `task_type` parameter for optimized retrieval. Supports Matryoshka Representation Learning (MRL) for flexible dimensions.
+
+```yaml
+embeddings:
+  enabled: true
+  provider: gemini
+  gemini_api_key: ${GEMINI_API_KEY}
+  gemini_model: gemini-embedding-001
+  task_type: RETRIEVAL_DOCUMENT
+  dimensions: 768
+  batch_size: 100
+  max_chars: 8000
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `provider` | - | Set to `gemini` for native SDK |
+| `gemini_api_key` | `${GEMINI_API_KEY}` | Google AI API key |
+| `gemini_model` | `gemini-embedding-001` | Or `text-embedding-004` |
+| `task_type` | `RETRIEVAL_DOCUMENT` | For indexing; auto-switches to `RETRIEVAL_QUERY` for searches |
+| `dimensions` | `768` | 768, 1536, or 3072 |
+| `batch_size` | `100` | Max texts per API call |
+| `max_chars` | `8000` | Gemini max input is ~8k chars |
+
+**Rate Limits (Free Tier)**:
+- 100 requests per minute (RPM)
+- 30,000 tokens per minute (TPM)
+- 1,000 requests per day (RPD)
+
+**Rate Limits (Pay-as-you-go)**:
+- 3,000 RPM
+- 1,000,000 TPM
+- Unlimited RPD
+
+::: warning Dimension Normalization
+Gemini's 3072-dimension output is already L2-normalized. For 768 or 1536 dimensions, the system automatically normalizes vectors for accurate cosine similarity.
+:::
+
+### Provider Fallback
+
+Configure automatic failover when primary provider hits rate limits:
+
+```yaml
+embeddings:
+  enabled: true
+  provider: cohere
+  api_key: ${COHERE_API_KEY}
+  model: embed-v4.0
+  fallback_provider: gemini
+  gemini_api_key: ${GEMINI_API_KEY}
+  gemini_model: gemini-embedding-001
+  dimensions: 768
+```
+
+When Cohere returns 429 (rate limit), the system automatically switches to Gemini with a 60-second cooldown before retrying Cohere.
+
 ### OpenAI
 
 ```yaml
@@ -182,15 +259,19 @@ database:
     
   embeddings:
     enabled: true
-    provider: cohere         # cohere | openai_compat
+    provider: cohere         # cohere | gemini | openai_compat
+    fallback_provider: gemini  # Optional: auto-failover on rate limit
     endpoint: ""             # Required for openai_compat
     model: embed-v4.0
     api_key: ""
     dimensions: 1536
     batch_size: 80
     max_chars: 40000
-    input_type: search_document
-    truncate: END
+    input_type: search_document  # Cohere: search_document | search_query
+    truncate: END                # Cohere: NONE | START | END
+    gemini_api_key: ""           # For gemini provider or fallback
+    gemini_model: gemini-embedding-001
+    task_type: RETRIEVAL_DOCUMENT  # Gemini: RETRIEVAL_DOCUMENT | RETRIEVAL_QUERY
 ```
 
 ### Environment Variables
@@ -208,6 +289,9 @@ EMBEDDINGS_MODEL=text-embedding-3-small
 
 # For Cohere specifically
 COHERE_API_KEY=your-cohere-key
+
+# For Gemini specifically
+GEMINI_API_KEY=your-gemini-key
 ```
 
 ## MCP Tools

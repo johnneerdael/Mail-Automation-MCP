@@ -377,15 +377,25 @@ class EmbeddingsConfig:
     """Embeddings configuration for semantic search."""
 
     enabled: bool = False
-    provider: str = "openai_compat"  # openai_compat | cohere
+    provider: str = "openai_compat"  # openai_compat | cohere | gemini
+    fallback_provider: Optional[str] = None  # Optional fallback on rate limit
     endpoint: str = "https://api.openai.com/v1/embeddings"
     model: str = "text-embedding-3-small"
     api_key: str = ""
     dimensions: int = 1536
     batch_size: int = 100
     max_chars: int = 500000
+    # Cohere-specific options
     input_type: str = "search_document"  # Cohere: search_document | search_query
     truncate: str = "END"  # Cohere: NONE | START | END
+    # Gemini-specific options
+    gemini_api_key: str = ""  # Separate API key for Gemini (fallback)
+    gemini_model: str = (
+        "gemini-embedding-001"  # gemini-embedding-001 | text-embedding-004
+    )
+    task_type: str = (
+        "RETRIEVAL_DOCUMENT"  # Gemini: RETRIEVAL_DOCUMENT | RETRIEVAL_QUERY
+    )
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EmbeddingsConfig":
@@ -394,9 +404,13 @@ class EmbeddingsConfig:
             or os.environ.get("EMBEDDINGS_API_KEY")
             or os.environ.get("OPENAI_API_KEY", "")
         )
+        gemini_api_key = data.get("gemini_api_key") or os.environ.get(
+            "GEMINI_API_KEY", ""
+        )
         return cls(
             enabled=data.get("enabled", False),
             provider=data.get("provider", "openai_compat"),
+            fallback_provider=data.get("fallback_provider"),
             endpoint=data.get("endpoint", "https://api.openai.com/v1/embeddings"),
             model=data.get("model", "text-embedding-3-small"),
             api_key=api_key,
@@ -405,6 +419,9 @@ class EmbeddingsConfig:
             max_chars=data.get("max_chars", 500000),
             input_type=data.get("input_type", "search_document"),
             truncate=data.get("truncate", "END"),
+            gemini_api_key=gemini_api_key,
+            gemini_model=data.get("gemini_model", "gemini-embedding-001"),
+            task_type=data.get("task_type", "RETRIEVAL_DOCUMENT"),
         )
 
 
