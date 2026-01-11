@@ -3,69 +3,65 @@
 
 {% block content %}
 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" x-data="{ search: '{{ search }}', sort: '{{ sort }}' }">
-    <!-- Sidebar with Frequent & Recent Contacts -->
     <div class="lg:col-span-1 space-y-6">
-        <!-- Frequent Contacts -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Frequent Contacts</h3>
+        <div class="card p-4">
+            <h3 class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Frequent Contacts</h3>
             <div class="space-y-2">
                 {% for contact in frequent %}
                 <a href="/contacts/{{ contact['email'] }}" 
-                   class="block p-2 rounded-lg hover:bg-gray-800 transition-colors">
+                   class="block p-2 rounded-lg hover:bg-surface-hover transition-colors">
                     <div class="flex items-center justify-between">
                         <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium text-gray-200 truncate">
+                            <p class="text-sm font-medium text-body truncate">
                                 {{ contact['display_name'] or contact['email'] }}
                                 {% if contact['is_vip'] %}
                                 <span class="text-yellow-400">★</span>
                                 {% endif %}
                             </p>
-                            <p class="text-xs text-gray-500 truncate">{{ contact['email'] }}</p>
+                            <p class="text-xs text-muted truncate">{{ contact['email'] }}</p>
                         </div>
-                        <span class="ml-2 text-xs text-gray-600">{{ contact['email_count'] }}</span>
+                        <span class="ml-2 text-xs text-muted">{{ contact['email_count'] }}</span>
                     </div>
                 </a>
                 {% endfor %}
                 {% if not frequent %}
-                <p class="text-sm text-gray-500">No contacts yet</p>
+                <p class="text-sm text-muted">No contacts yet</p>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Recent Contacts -->
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-4">
-            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Recent Contacts</h3>
+        <div class="card p-4">
+            <h3 class="text-sm font-semibold text-muted uppercase tracking-wider mb-3">Recent Contacts</h3>
             <div class="space-y-2">
                 {% for contact in recent %}
                 <a href="/contacts/{{ contact['email'] }}" 
-                   class="block p-2 rounded-lg hover:bg-gray-800 transition-colors">
+                   class="block p-2 rounded-lg hover:bg-surface-hover transition-colors">
                     <div class="min-w-0">
-                        <p class="text-sm font-medium text-gray-200 truncate">
+                        <p class="text-sm font-medium text-body truncate">
                             {{ contact['display_name'] or contact['email'] }}
                             {% if contact['is_vip'] %}
                             <span class="text-yellow-400">★</span>
                             {% endif %}
                         </p>
-                        <p class="text-xs text-gray-500 truncate">{{ contact['email'] }}</p>
+                        <p class="text-xs text-muted truncate">{{ contact['email'] }}</p>
                         {% if contact['last_email_date'] %}
-                        <p class="text-xs text-gray-600 mt-1">{{ contact['last_email_date'].strftime('%b %d') }}</p>
+                        <p class="text-xs text-muted mt-1">{{ contact['last_email_date'].strftime('%b %d') }}</p>
                         {% endif %}
                     </div>
                 </a>
                 {% endfor %}
                 {% if not recent %}
-                <p class="text-sm text-gray-500">No contacts yet</p>
+                <p class="text-sm text-muted">No contacts yet</p>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Sync Button -->
         <button 
             hx-post="/api/contacts/sync?limit=1000"
             hx-swap="none"
             hx-indicator="#sync-spinner"
             hx-on::after-request="window.showToast(JSON.parse(event.detail.xhr.response).success ? 'Contacts synced successfully!' : 'Sync failed', JSON.parse(event.detail.xhr.response).success ? 'success' : 'error'); if(JSON.parse(event.detail.xhr.response).success) window.location.reload();"
-            class="w-full px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 flex items-center justify-center gap-2">
+            class="w-full btn-primary flex items-center justify-center gap-2">
             <span id="sync-spinner" class="htmx-indicator">
                 <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -76,9 +72,7 @@
         </button>
     </div>
 
-    <!-- Main Content Area -->
     <div class="lg:col-span-3 space-y-4">
-        <!-- Search and Sort Controls -->
         <div class="flex flex-col sm:flex-row gap-3">
             <div class="flex-1">
                 <input 
@@ -86,12 +80,12 @@
                     x-model="search"
                     @keyup.enter="window.location.href = `/contacts?search=${encodeURIComponent(search)}&sort=${sort}`"
                     placeholder="Search contacts by name or email..."
-                    class="w-full px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                    class="input-field w-full">
             </div>
             <select 
                 x-model="sort"
                 @change="window.location.href = `/contacts?search=${encodeURIComponent(search)}&sort=${sort}`"
-                class="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary">
+                class="input-field w-full sm:w-auto">
                 <option value="last_email_date" {% if sort == 'last_email_date' %}selected{% endif %}>Recent First</option>
                 <option value="email_count" {% if sort == 'email_count' %}selected{% endif %}>Most Frequent</option>
                 <option value="email" {% if sort == 'email' %}selected{% endif %}>Email (A-Z)</option>
@@ -99,66 +93,60 @@
             </select>
         </div>
 
-        <!-- Contacts Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {% for contact in contacts %}
             <a href="/contacts/{{ contact['email'] }}" 
-               class="block bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-primary transition-colors">
+               class="block card p-4 hover:border-primary transition-colors group">
                 <div class="flex items-start justify-between">
                     <div class="min-w-0 flex-1">
-                        <h3 class="text-base font-semibold text-gray-100 truncate">
+                        <h3 class="text-base font-semibold text-body truncate group-hover:text-primary transition-colors">
                             {{ contact['display_name'] or contact['email'] }}
                             {% if contact['is_vip'] %}
                             <span class="text-yellow-400 ml-1">★</span>
                             {% endif %}
                         </h3>
-                        <p class="text-sm text-gray-500 truncate mt-1">{{ contact['email'] }}</p>
+                        <p class="text-sm text-muted truncate mt-1">{{ contact['email'] }}</p>
                         {% if contact['organization'] %}
-                        <p class="text-xs text-gray-600 mt-1">{{ contact['organization'] }}</p>
+                        <p class="text-xs text-muted mt-1">{{ contact['organization'] }}</p>
                         {% endif %}
                     </div>
                 </div>
-                <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-800">
-                    <span class="text-xs text-gray-600">{{ contact['email_count'] }} email{{ 's' if contact['email_count'] != 1 else '' }}</span>
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-border">
+                    <span class="text-xs text-muted">{{ contact['email_count'] }} email{{ 's' if contact['email_count'] != 1 else '' }}</span>
                     {% if contact['last_email_date'] %}
-                    <span class="text-xs text-gray-600">Last: {{ contact['last_email_date'].strftime('%b %d, %Y') }}</span>
+                    <span class="text-xs text-muted">Last: {{ contact['last_email_date'].strftime('%b %d, %Y') }}</span>
                     {% endif %}
                 </div>
             </a>
             {% endfor %}
         </div>
 
-        <!-- Empty State -->
         {% if not contacts %}
-        <div class="bg-gray-900 border border-gray-800 rounded-lg p-8 text-center">
-            <p class="text-gray-500 mb-4">
-                {% if search %}
-                No contacts found matching "{{ search }}"
-                {% else %}
-                No contacts yet. Click "Sync Contacts" to extract contacts from your emails.
-                {% endif %}
-            </p>
             {% if search %}
-            <a href="/contacts" class="text-primary hover:underline">Clear search</a>
+                {% with icon="👥", title="No contacts found", description='No contacts found matching "' ~ search ~ '"', action_url="/contacts", action_text="Clear search" %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
+            {% else %}
+                {% with icon="👥", title="No contacts yet", description="Click 'Sync Contacts' to extract contacts from your emails." %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
             {% endif %}
-        </div>
         {% endif %}
 
-        <!-- Pagination -->
         {% if contacts %}
         <div class="flex justify-center gap-2 pt-4">
             {% if page > 1 %}
             <a href="/contacts?search={{ search }}&sort={{ sort }}&page={{ page - 1 }}" 
-               class="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg hover:border-primary transition-colors">
+               class="btn-secondary">
                 ← Previous
             </a>
             {% endif %}
-            <span class="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg">
+            <span class="px-4 py-2 text-body font-medium">
                 Page {{ page }}
             </span>
             {% if contacts|length == 50 %}
             <a href="/contacts?search={{ search }}&sort={{ sort }}&page={{ page + 1 }}" 
-               class="px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg hover:border-primary transition-colors">
+               class="btn-secondary">
                 Next →
             </a>
             {% endif %}

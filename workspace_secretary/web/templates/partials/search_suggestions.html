@@ -1,17 +1,17 @@
 {% if suggestions %}
-<div class="bg-gray-800 border border-gray-700 rounded-lg shadow-lg divide-y divide-gray-700">
+<div class="bg-surface-dim border border-border rounded-lg shadow-lg divide-y divide-border">
     {% for suggestion in suggestions %}
     <button type="button"
             onclick="document.querySelector('input[name=q]').value = '{{ suggestion.value|e }}'; this.parentElement.innerHTML = '';"
-            class="w-full px-4 py-2 text-left hover:bg-gray-700 transition-colors flex items-center gap-2">
+            class="w-full px-4 py-2 text-left hover:bg-surface-hover transition-colors flex items-center gap-2">
         {% if suggestion.type == 'sender' %}
-        <span class="text-gray-500">👤</span>
-        <span class="text-sm text-gray-300 truncate">{{ suggestion.value }}</span>
-        <span class="text-xs text-gray-600 ml-auto">sender</span>
+        <span class="text-muted">👤</span>
+        <span class="text-sm text-default truncate">{{ suggestion.value }}</span>
+        <span class="text-xs text-muted ml-auto">sender</span>
         {% else %}
-        <span class="text-gray-500">📧</span>
-        <span class="text-sm text-gray-300 truncate">{{ suggestion.value }}</span>
-        <span class="text-xs text-gray-600 ml-auto">subject</span>
+        <span class="text-muted">📧</span>
+        <span class="text-sm text-default truncate">{{ suggestion.value }}</span>
+        <span class="text-xs text-muted ml-auto">subject</span>
         {% endif %}
     </button>
     {% endfor %}

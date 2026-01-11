@@ -4,21 +4,21 @@
 
 {% block content %}
 <div class="flex flex-col h-[calc(100vh-4rem)]">
-    <div class="flex items-center justify-between px-6 py-3 border-b border-zinc-700">
+    <div class="flex items-center justify-between px-6 py-3 border-b border-border">
         <div class="flex items-center gap-3">
             <span class="text-2xl">🤖</span>
-            <h1 class="text-lg font-semibold text-white">AI Assistant</h1>
+            <h1 class="text-lg font-semibold text-default">AI Assistant</h1>
         </div>
         <button 
             onclick="clearChat()"
-            class="px-3 py-1.5 text-sm text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
+            class="px-3 py-1.5 text-sm text-muted hover:text-default hover:bg-surface-hover rounded-lg transition-colors"
         >
             Clear Chat
         </button>
     </div>
 
     <div id="chat-messages" class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        <div class="text-center text-zinc-500 py-8" id="empty-state">
+        <div class="text-center text-muted py-8" id="empty-state">
             <div class="text-4xl mb-3">💬</div>
             <p class="text-lg">How can I help you today?</p>
             <p class="text-sm mt-2">Ask me about your emails, calendar, or let me help draft replies.</p>
@@ -31,7 +31,7 @@
                     📋 Summarize today
                 </button>
                 <button onclick="sendSuggestion('What meetings do I have this week?')" class="suggestion-btn">
-                    📅 This week\'s meetings
+                    📅 This week's meetings
                 </button>
                 <button onclick="sendSuggestion('Are there any urgent emails I should respond to?')" class="suggestion-btn">
                     🚨 Urgent emails
@@ -40,20 +40,20 @@
         </div>
     </div>
 
-    <div class="border-t border-zinc-700 px-6 py-4">
+    <div class="border-t border-border px-6 py-4">
         <form id="chat-form" onsubmit="sendMessage(event)" class="flex gap-3">
             <input 
                 type="text" 
                 id="message-input"
                 name="message"
                 placeholder="Ask about your emails, calendar, or request help..."
-                class="flex-1 px-4 py-3 bg-zinc-800 border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="input-field flex-1"
                 autocomplete="off"
             >
             <button 
                 type="submit"
                 id="send-btn"
-                class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+                class="btn-primary px-6 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 Send
             </button>
@@ -63,23 +63,23 @@
 
 <style>
 .suggestion-btn {
-    @apply px-3 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors;
+    @apply px-3 py-2 text-sm bg-surface-dim hover:bg-surface-hover text-muted-foreground rounded-lg transition-colors border border-border;
 }
 
 .message-user {
-    @apply bg-blue-600 text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[80%] ml-auto;
+    @apply bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-4 py-2 max-w-[80%] ml-auto;
 }
 
 .message-assistant {
-    @apply bg-zinc-700 text-zinc-100 rounded-2xl rounded-bl-sm px-4 py-2 max-w-[80%];
+    @apply bg-surface-dim text-default rounded-2xl rounded-bl-sm px-4 py-2 max-w-[80%] border border-border;
 }
 
 .message-assistant pre {
-    @apply bg-zinc-800 rounded-lg p-3 my-2 overflow-x-auto text-sm;
+    @apply bg-surface rounded-lg p-3 my-2 overflow-x-auto text-sm border border-border;
 }
 
 .message-assistant code {
-    @apply bg-zinc-800 px-1.5 py-0.5 rounded text-sm;
+    @apply bg-surface px-1.5 py-0.5 rounded text-sm font-mono text-primary;
 }
 
 .message-assistant ul, .message-assistant ol {
@@ -95,7 +95,7 @@
 }
 
 .typing-indicator span {
-    @apply w-2 h-2 bg-zinc-400 rounded-full animate-bounce;
+    @apply w-2 h-2 bg-muted rounded-full animate-bounce;
 }
 
 .typing-indicator span:nth-child(2) {

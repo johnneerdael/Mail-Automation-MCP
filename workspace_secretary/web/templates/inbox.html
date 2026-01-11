@@ -2,87 +2,87 @@
 {% block title %}Inbox - Secretary{% endblock %}
 
 {% block content %}
-<div class="space-y-4" x-data="bulkActions()">
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 class="text-xl sm:text-2xl font-bold">Inbox</h1>
-        <div class="flex items-center justify-between sm:justify-end space-x-4">
-            <label class="flex items-center space-x-2 text-sm text-gray-400">
-                <input type="checkbox" 
-                       {% if unread_only %}checked{% endif %}
-                       hx-get="/inbox?unread_only={{ 'false' if unread_only else 'true' }}&folder={{ folder }}"
-                       hx-target="body"
-                       hx-swap="outerHTML"
-                       class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
-                <span>Unread only</span>
-            </label>
-            <a href="/compose" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 touch-manipulation">
-                <span class="hidden sm:inline">✏️ Compose</span>
-                <span class="sm:hidden">✏️</span>
-            </a>
+    <div class="space-y-4" x-data="bulkActions()">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h1 class="h1">Inbox</h1>
+            <div class="flex items-center justify-between sm:justify-end space-x-4">
+                <label class="flex items-center space-x-2 text-sm text-muted">
+                    <input type="checkbox" 
+                           {% if unread_only %}checked{% endif %}
+                           hx-get="/inbox?unread_only={{ 'false' if unread_only else 'true' }}&folder={{ folder }}"
+                           hx-target="body"
+                           hx-swap="outerHTML"
+                           class="rounded bg-surface-subtle border-border text-primary focus:ring-primary">
+                    <span>Unread only</span>
+                </label>
+                <a href="/compose" class="btn-primary no-underline touch-manipulation">
+                    <span class="hidden sm:inline">✏️ Compose</span>
+                    <span class="sm:hidden">✏️</span>
+                </a>
+            </div>
         </div>
-    </div>
 
-    <div x-show="selected.length > 0" x-cloak 
-         class="flex flex-wrap items-center gap-2 p-3 bg-gray-900 border border-gray-700 rounded-lg">
-        <span class="text-sm text-gray-400" x-text="selected.length + ' selected'"></span>
-        <div class="flex flex-wrap gap-2 ml-auto">
-            <button @click="bulkAction('mark-read')" 
-                    class="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 rounded hover:bg-gray-700 touch-manipulation">
-                ✓ Mark Read
-            </button>
-            <button @click="bulkAction('mark-unread')" 
-                    class="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 rounded hover:bg-gray-700 touch-manipulation">
-                ○ Mark Unread
-            </button>
-            <button @click="bulkAction('archive')" 
-                    class="px-3 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 rounded hover:bg-gray-700 touch-manipulation">
-                📥 Archive
-            </button>
-            <button @click="bulkAction('delete')" 
-                    class="px-3 py-1.5 text-xs font-medium text-red-400 bg-gray-800 rounded hover:bg-gray-700 touch-manipulation">
-                🗑️ Delete
-            </button>
-            <button @click="clearSelection()" 
-                    class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-300 touch-manipulation">
-                ✕ Clear
-            </button>
+        <div x-show="selected.length > 0" x-cloak 
+             class="flex flex-wrap items-center gap-2 p-3 bg-surface border border-border rounded-lg shadow-sm">
+            <span class="text-sm text-muted" x-text="selected.length + ' selected'"></span>
+            <div class="flex flex-wrap gap-2 ml-auto">
+                <button @click="bulkAction('mark-read')" 
+                        class="btn-secondary text-xs py-1.5 touch-manipulation">
+                    ✓ Mark Read
+                </button>
+                <button @click="bulkAction('mark-unread')" 
+                        class="btn-secondary text-xs py-1.5 touch-manipulation">
+                    ○ Mark Unread
+                </button>
+                <button @click="bulkAction('archive')" 
+                        class="btn-secondary text-xs py-1.5 touch-manipulation">
+                    📥 Archive
+                </button>
+                <button @click="bulkAction('delete')" 
+                        class="px-3 py-1.5 text-xs font-medium text-white bg-error rounded hover:bg-red-600 touch-manipulation transition-colors">
+                    🗑️ Delete
+                </button>
+                <button @click="clearSelection()" 
+                        class="px-3 py-1.5 text-xs font-medium text-muted hover:text-body touch-manipulation">
+                    ✕ Clear
+                </button>
+            </div>
         </div>
-    </div>
 
-    <div class="bg-gray-900 rounded-lg divide-y divide-gray-800"
-         id="email-list-container"
-         hx-get="/api/emails?page={{ page }}&folder={{ folder }}&unread_only={{ unread_only }}"
-         hx-trigger="refreshList from:body"
-         hx-target="#email-list-rows"
-         hx-select="#email-list-rows">
-        {% if emails %}
-            <div class="px-3 py-2 sm:px-4 border-b border-gray-700 flex items-center gap-3">
+        <div class="bg-surface rounded-lg divide-y divide-border border border-border shadow-sm"
+             id="email-list-container"
+             hx-get="/api/emails?page={{ page }}&folder={{ folder }}&unread_only={{ unread_only }}"
+             hx-trigger="refreshList from:body"
+             hx-target="#email-list-rows"
+             hx-select="#email-list-rows">
+            {% if emails %}
+            <div class="px-3 py-2 sm:px-4 border-b border-border flex items-center gap-3">
                 <label class="flex items-center cursor-pointer touch-manipulation">
                     <input type="checkbox" 
                            @change="toggleAll($event.target.checked)"
                            :checked="selected.length === {{ emails|length }}"
                            :indeterminate="selected.length > 0 && selected.length < {{ emails|length }}"
-                           class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
+                           class="rounded bg-surface-subtle border-border text-primary focus:ring-primary">
                 </label>
-                <span class="text-xs text-gray-500">Select all</span>
+                <span class="text-xs text-muted">Select all</span>
             </div>
             <div id="email-list-rows">
                 {% for email in emails %}
-                <div class="flex items-start hover:bg-gray-800 active:bg-gray-700 transition-colors">
+                <div class="flex items-start hover:bg-surface-subtle transition-colors">
                     <label class="flex items-center px-3 py-4 cursor-pointer touch-manipulation self-stretch">
                         <input type="checkbox" 
                                value="{{ email.uid }}"
                                data-folder="{{ email.folder }}"
                                @change="toggleSelect('{{ email.uid }}', '{{ email.folder }}', $event.target.checked)"
                                :checked="isSelected('{{ email.uid }}')"
-                               class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
+                               class="rounded bg-surface-subtle border-border text-primary focus:ring-primary">
                     </label>
                     <button hx-post="/api/email/toggle-star/{{ email.folder }}/{{ email.uid }}"
                             hx-swap="none"
                             hx-on::after-request="this.querySelector('span').textContent = event.detail.xhr.response.includes('true') ? '★' : '☆'; this.querySelector('span').classList.toggle('text-yellow-400', event.detail.xhr.response.includes('true'))"
                             class="flex items-center py-4 pr-1 touch-manipulation"
                             title="Toggle star">
-                        <span class="text-lg {% if email.is_starred %}text-yellow-400{% else %}text-gray-600 hover:text-gray-400{% endif %}">
+                        <span class="text-lg {% if email.is_starred %}text-yellow-400{% else %}text-muted hover:text-body{% endif %}">
                             {% if email.is_starred %}★{% else %}☆{% endif %}
                         </span>
                     </button>
@@ -98,22 +98,22 @@
                                 
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center justify-between sm:justify-start gap-2">
-                                        <p class="text-sm font-medium truncate {% if email.is_unread %}text-white{% else %}text-gray-300{% endif %}">
+                                        <p class="text-sm font-medium truncate {% if email.is_unread %}text-body{% else %}text-muted{% endif %}">
                                             {{ email.from_name or email.from_addr }}
                                         </p>
                                         <div class="flex items-center gap-1 sm:hidden flex-shrink-0">
                                             {% if email.has_attachments %}
-                                            <span class="text-gray-500 text-xs">📎</span>
+                                            <span class="text-muted text-xs">📎</span>
                                             {% endif %}
-                                            <span class="text-xs text-gray-500">{{ email.date }}</span>
+                                            <span class="text-xs text-muted">{{ email.date }}</span>
                                         </div>
                                     </div>
                                     
-                                    <p class="text-sm truncate mt-0.5 {% if email.is_unread %}text-white font-semibold{% else %}text-gray-300{% endif %}">
+                                    <p class="text-sm truncate mt-0.5 {% if email.is_unread %}text-body font-semibold{% else %}text-muted{% endif %}">
                                         {{ email.subject }}
                                     </p>
                                     {% if email.preview %}
-                                    <p class="text-xs sm:text-sm text-gray-500 truncate mt-0.5 hidden sm:block">
+                                    <p class="text-xs sm:text-sm text-muted truncate mt-0.5 hidden sm:block">
                                         {{ email.preview }}
                                     </p>
                                     {% endif %}
@@ -122,9 +122,9 @@
                             
                             <div class="hidden sm:flex ml-4 items-center space-x-2 flex-shrink-0">
                                 {% if email.has_attachments %}
-                                <span class="text-gray-500" title="Has attachments">📎</span>
+                                <span class="text-muted" title="Has attachments">📎</span>
                                 {% endif %}
-                                <span class="text-sm text-gray-500">{{ email.date }}</span>
+                                <span class="text-sm text-muted">{{ email.date }}</span>
                             </div>
                         </div>
                     </a>
@@ -132,9 +132,9 @@
                 {% endfor %}
             </div>
         {% else %}
-            <div class="px-4 py-12 text-center">
-                <p class="text-gray-500">No emails found</p>
-            </div>
+            {% with icon="📭", title="No emails found", description="Try adjusting your filters." %}
+                {% include "partials/empty_state.html" %}
+            {% endwith %}
         {% endif %}
     </div>
 

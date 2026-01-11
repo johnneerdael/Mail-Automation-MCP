@@ -3,9 +3,8 @@
 
 {% block content %}
 <div class="space-y-6" x-data="{ showFilters: false, showSaveModal: false }">
-    <!-- Search Form -->
     <form action="/search" method="get" class="space-y-4">
-        <div class="flex space-x-4">
+        <div class="flex flex-col sm:flex-row gap-4">
             <div class="flex-1 relative">
                 <input type="text" 
                        name="q" 
@@ -15,28 +14,29 @@
                        hx-get="/search/suggestions"
                        hx-trigger="keyup changed delay:300ms"
                        hx-target="#suggestions"
-                       class="w-full px-4 py-3 border border-gray-700 rounded-lg bg-gray-900 text-white placeholder-gray-500 focus:ring-2 focus:ring-primary focus:border-transparent">
+                       class="input-field w-full">
                 <div id="suggestions" class="absolute z-10 w-full mt-1"></div>
             </div>
-            <button type="button" 
-                    @click="showFilters = !showFilters"
-                    class="px-4 py-3 text-sm font-medium border rounded-lg transition-colors"
-                    :class="showFilters ? 'border-primary text-primary bg-primary/10' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'">
-                <span class="flex items-center gap-2">
-                    🔽 Filters
-                    {% if filters.from_addr or filters.date_from or filters.date_to or filters.has_attachments is not none or filters.is_unread is not none %}
-                    <span class="w-2 h-2 bg-primary rounded-full"></span>
-                    {% endif %}
-                </span>
-            </button>
-            <button type="submit" 
-                    class="px-6 py-3 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
-                Search
-            </button>
+            <div class="flex gap-2">
+                <button type="button" 
+                        @click="showFilters = !showFilters"
+                        class="btn-secondary whitespace-nowrap"
+                        :class="{ 'bg-primary/10 border-primary text-primary': showFilters }">
+                    <span class="flex items-center gap-2">
+                        <span>🔽 Filters</span>
+                        {% if filters.from_addr or filters.date_from or filters.date_to or filters.has_attachments is not none or filters.is_unread is not none %}
+                        <span class="w-2 h-2 bg-primary rounded-full"></span>
+                        {% endif %}
+                    </span>
+                </button>
+                <button type="submit" 
+                        class="btn-primary whitespace-nowrap">
+                    Search
+                </button>
+            </div>
         </div>
         
-        <!-- Search Mode Toggle -->
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div class="flex items-center space-x-6">
                 <label class="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" name="mode" value="keyword" {% if mode == 'keyword' %}checked{% endif %}
@@ -45,8 +45,8 @@
                            hx-include="[name='q'], [name='folder']"
                            hx-target="body"
                            hx-swap="outerHTML"
-                           class="text-primary bg-gray-900 border-gray-700 focus:ring-primary">
-                    <span class="text-sm text-gray-300">Keyword Search</span>
+                           class="text-primary bg-surface border-border focus:ring-primary">
+                    <span class="text-sm text-body">Keyword Search</span>
                 </label>
                 {% if supports_semantic %}
                 <label class="flex items-center space-x-2 cursor-pointer group">
@@ -56,17 +56,17 @@
                            hx-include="[name='q'], [name='folder']"
                            hx-target="body"
                            hx-swap="outerHTML"
-                           class="text-primary bg-gray-900 border-gray-700 focus:ring-primary">
-                    <span class="text-sm text-gray-300 flex items-center gap-1.5">
-                        <span class="text-purple-400">✨</span> Semantic (AI)
-                        <span class="text-xs text-gray-500 group-hover:text-gray-400">(find by meaning)</span>
+                           class="text-primary bg-surface border-border focus:ring-primary">
+                    <span class="text-sm text-body flex items-center gap-1.5">
+                        <span class="text-purple-500">✨</span> Semantic (AI)
+                        <span class="text-xs text-muted group-hover:text-body transition-colors">(find by meaning)</span>
                     </span>
                 </label>
                 {% else %}
                 <label class="flex items-center space-x-2 opacity-50 cursor-not-allowed">
                     <input type="radio" name="mode" value="semantic" disabled
-                           class="text-primary bg-gray-900 border-gray-700">
-                    <span class="text-sm text-gray-500 flex items-center gap-1.5">
+                           class="text-primary bg-surface border-border">
+                    <span class="text-sm text-muted flex items-center gap-1.5">
                         <span>✨</span> Semantic (AI)
                         <span class="text-xs">(requires embeddings enabled)</span>
                     </span>
@@ -74,10 +74,9 @@
                 {% endif %}
             </div>
             
-            <!-- Folder selector -->
-            <div class="flex items-center gap-2">
-                <label class="text-sm text-gray-500">Folder:</label>
-                <select name="folder" class="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-sm text-gray-300">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                <label class="text-sm text-muted whitespace-nowrap">Folder:</label>
+                <select name="folder" class="input-field py-1 text-sm">
                     {% for f in folders %}
                     <option value="{{ f }}" {% if f == folder %}selected{% endif %}>{{ f }}</option>
                     {% endfor %}
@@ -85,53 +84,48 @@
             </div>
         </div>
 
-        <!-- Advanced Filters Panel -->
-        <div x-show="showFilters" x-collapse class="bg-gray-900/50 border border-gray-700 rounded-lg p-4 space-y-4">
+        <div x-show="showFilters" x-collapse class="card p-4 space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- From filter -->
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">From</label>
+                    <label class="block text-xs text-muted mb-1">From</label>
                     <input type="text" name="from" value="{{ filters.from_addr }}"
                            placeholder="sender@example.com"
-                           class="w-full px-3 py-2 text-sm border border-gray-700 rounded bg-gray-800 text-white placeholder-gray-600 focus:ring-1 focus:ring-primary">
+                           class="input-field w-full text-sm">
                 </div>
                 
-                <!-- Date from -->
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">Date From</label>
+                    <label class="block text-xs text-muted mb-1">Date From</label>
                     <input type="date" name="date_from" value="{{ filters.date_from }}"
-                           class="w-full px-3 py-2 text-sm border border-gray-700 rounded bg-gray-800 text-white focus:ring-1 focus:ring-primary">
+                           class="input-field w-full text-sm">
                 </div>
                 
-                <!-- Date to -->
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">Date To</label>
+                    <label class="block text-xs text-muted mb-1">Date To</label>
                     <input type="date" name="date_to" value="{{ filters.date_to }}"
-                           class="w-full px-3 py-2 text-sm border border-gray-700 rounded bg-gray-800 text-white focus:ring-1 focus:ring-primary">
+                           class="input-field w-full text-sm">
                 </div>
                 
-                <!-- Checkboxes -->
                 <div class="flex flex-col justify-end gap-2">
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" name="has_attachments" value="true"
                                {% if filters.has_attachments %}checked{% endif %}
-                               class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
-                        <span class="text-sm text-gray-400">📎 Has attachments</span>
+                               class="rounded bg-surface border-border text-primary focus:ring-primary">
+                        <span class="text-sm text-body">📎 Has attachments</span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" name="is_unread" value="true"
                                {% if filters.is_unread %}checked{% endif %}
-                               class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
-                        <span class="text-sm text-gray-400">● Unread only</span>
+                               class="rounded bg-surface border-border text-primary focus:ring-primary">
+                        <span class="text-sm text-body">● Unread only</span>
                     </label>
                 </div>
             </div>
             
-            <div class="flex items-center justify-between pt-2 border-t border-gray-700">
-                <a href="/search" class="text-sm text-gray-500 hover:text-gray-400">Clear all filters</a>
+            <div class="flex items-center justify-between pt-2 border-t border-border">
+                <a href="/search" class="text-sm text-muted hover:text-body">Clear all filters</a>
                 {% if query %}
                 <button type="button" @click="showSaveModal = true" 
-                        class="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
+                        class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1">
                     💾 Save this search
                 </button>
                 {% endif %}
@@ -139,138 +133,129 @@
         </div>
     </form>
 
-    <!-- Saved Searches -->
     {% if saved_searches %}
     <div id="saved-searches" class="flex flex-wrap gap-2">
-        <span class="text-xs text-gray-500 self-center mr-1">Saved:</span>
+        <span class="text-xs text-muted self-center mr-1">Saved:</span>
         {% include "partials/saved_searches.html" %}
     </div>
     {% endif %}
 
-    <!-- Active Operator Chips -->
     {% if active_operators %}
     <div class="flex flex-wrap gap-2 items-center">
-        <span class="text-xs text-gray-500">Active filters:</span>
+        <span class="text-xs text-muted">Active filters:</span>
         {% if active_operators.from_addr %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-900/30 border border-blue-700 rounded-full text-xs text-blue-300">
+        <span class="badge badge-neutral">
             <span class="font-medium">from:</span>{{ active_operators.from_addr }}
         </span>
         {% endif %}
         {% if active_operators.to_addr %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-green-900/30 border border-green-700 rounded-full text-xs text-green-300">
+        <span class="badge badge-neutral">
             <span class="font-medium">to:</span>{{ active_operators.to_addr }}
         </span>
         {% endif %}
         {% if active_operators.subject_contains %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-purple-900/30 border border-purple-700 rounded-full text-xs text-purple-300">
+        <span class="badge badge-neutral">
             <span class="font-medium">subject:</span>{{ active_operators.subject_contains }}
         </span>
         {% endif %}
         {% if active_operators.has_attachments %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-900/30 border border-amber-700 rounded-full text-xs text-amber-300">
+        <span class="badge badge-warning">
             📎 has:attachment
         </span>
         {% endif %}
         {% if active_operators.is_unread is not none %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-cyan-900/30 border border-cyan-700 rounded-full text-xs text-cyan-300">
+        <span class="badge badge-info">
             is:{{ 'unread' if active_operators.is_unread else 'read' }}
         </span>
         {% endif %}
         {% if active_operators.is_starred %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-yellow-900/30 border border-yellow-700 rounded-full text-xs text-yellow-300">
+        <span class="badge badge-warning">
             ⭐ is:starred
         </span>
         {% endif %}
         {% if active_operators.attachment_filename %}
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-pink-900/30 border border-pink-700 rounded-full text-xs text-pink-300">
+        <span class="badge badge-neutral">
             <span class="font-medium">attachment:</span>{{ active_operators.attachment_filename }}
         </span>
         {% endif %}
     </div>
     {% endif %}
 
-    <!-- Results -->
     {% if query or (filters.from_addr or filters.date_from or filters.date_to or filters.has_attachments is not none or filters.is_unread is not none) %}
     <div class="space-y-3">
         <div class="flex items-center justify-between">
-            <h2 class="text-lg font-medium text-white">
+            <h2 class="text-lg font-medium text-body">
                 {{ results|length }} result{% if results|length != 1 %}s{% endif %}
                 {% if parsed_query %}for "{{ parsed_query }}"{% elif query %}for "{{ query }}"{% endif %}
-                {% if mode == 'semantic' %}<span class="text-purple-400 text-sm ml-2">✨ semantic</span>{% endif %}
+                {% if mode == 'semantic' %}<span class="text-purple-500 text-sm ml-2">✨ semantic</span>{% endif %}
             </h2>
         </div>
         
-        <div class="bg-gray-900 rounded-lg divide-y divide-gray-800">
+        <div class="card p-0 overflow-hidden divide-y divide-border">
             {% if results %}
                 {% for result in results %}
                 <a href="/thread/{{ result.folder }}/{{ result.uid }}" 
-                   class="block hover:bg-gray-800 transition-colors">
+                   class="block hover:bg-surface-hover transition-colors">
                     <div class="px-4 py-4">
                         <div class="flex items-center justify-between mb-1">
                             <div class="flex items-center gap-2">
                                 {% if result.is_unread %}
                                 <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
                                 {% endif %}
-                                <p class="text-sm font-medium text-white">
+                                <p class="text-sm font-medium text-body">
                                     {{ result.from_name }}
                                 </p>
                                 {% if result.has_attachments %}
-                                <span class="text-gray-500">📎</span>
+                                <span class="text-muted">📎</span>
                                 {% endif %}
                             </div>
                             <div class="flex items-center space-x-3">
                                 {% if result.similarity %}
                                 <span class="text-xs px-2 py-0.5 rounded-full 
-                                    {% if result.similarity > 0.85 %}bg-green-900 text-green-200
-                                    {% elif result.similarity > 0.7 %}bg-yellow-900 text-yellow-200
-                                    {% else %}bg-gray-700 text-gray-300{% endif %}">
+                                    {% if result.similarity > 0.85 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
+                                    {% elif result.similarity > 0.7 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
+                                    {% else %}bg-surface-subtle text-muted{% endif %}">
                                     {{ "%.0f"|format(result.similarity * 100) }}% match
                                 </span>
                                 {% endif %}
-                                <span class="text-sm text-gray-500">{{ result.date }}</span>
+                                <span class="text-sm text-muted">{{ result.date }}</span>
                             </div>
                         </div>
-                        <p class="text-sm font-medium text-gray-200">{{ result.subject }}</p>
-                        <p class="text-sm text-gray-500 mt-1">{{ result.preview }}</p>
+                        <p class="text-sm font-medium text-body">{{ result.subject }}</p>
+                        <p class="text-sm text-muted mt-1">{{ result.preview }}</p>
                     </div>
                 </a>
                 {% endfor %}
             {% else %}
-                <div class="px-4 py-12 text-center">
-                    <p class="text-gray-500">No results found</p>
-                    <p class="text-sm text-gray-600 mt-1">Try adjusting your search terms or filters</p>
-                </div>
+                {% with icon="🔍", title="No results found", description="Try adjusting your search terms or filters." %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
             {% endif %}
         </div>
     </div>
     {% else %}
-    <div class="text-center py-12">
-        <div class="text-4xl mb-4">🔍</div>
-        <p class="text-gray-400">Enter a search query to find emails</p>
-        <div class="mt-4 space-y-2">
-            <p class="text-sm text-gray-500">Try operators like:</p>
+    <div class="py-12">
+        {% with icon="🔍", title="Search your emails", description="Enter a query to find what you're looking for. Use 'semantic' mode for AI-powered meaning search." %}
+            {% include "partials/empty_state.html" %}
+        {% endwith %}
+        
+        <div class="mt-8 max-w-2xl mx-auto">
+            <p class="text-sm text-muted text-center mb-4">Try operators like:</p>
             <div class="flex flex-wrap justify-center gap-2 text-xs">
-                <code class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-400">from:sender@example.com</code>
-                <code class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-400">subject:meeting</code>
-                <code class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-400">has:attachment</code>
-                <code class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-400">attachment:report.pdf</code>
-                <code class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-400">is:unread</code>
+                <code class="px-2 py-1 bg-surface-subtle border border-border rounded text-body">from:sender@example.com</code>
+                <code class="px-2 py-1 bg-surface-subtle border border-border rounded text-body">subject:meeting</code>
+                <code class="px-2 py-1 bg-surface-subtle border border-border rounded text-body">has:attachment</code>
+                <code class="px-2 py-1 bg-surface-subtle border border-border rounded text-body">is:unread</code>
             </div>
         </div>
-        {% if supports_semantic %}
-        <p class="text-sm text-gray-600 mt-4">
-            Try <span class="text-purple-400">✨ semantic search</span> to find emails by meaning, not just keywords
-        </p>
-        {% endif %}
     </div>
     {% endif %}
 
-    <!-- Save Search Modal -->
     <div x-show="showSaveModal" x-cloak 
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
          @click.self="showSaveModal = false">
-        <div class="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
-            <h3 class="text-lg font-medium text-white mb-4">Save Search</h3>
+        <div class="bg-surface rounded-xl p-6 w-full max-w-md border border-border shadow-xl">
+            <h3 class="h2 mb-4">Save Search</h3>
             <form hx-post="/search/save" hx-target="#saved-searches" hx-swap="innerHTML" @htmx:after-request="showSaveModal = false">
                 <input type="hidden" name="query" value="{{ query }}">
                 <input type="hidden" name="mode" value="{{ mode }}">
@@ -282,18 +267,18 @@
                 {% if filters.is_unread %}<input type="hidden" name="is_unread" value="true">{% endif %}
                 
                 <div class="mb-4">
-                    <label class="block text-sm text-gray-400 mb-1">Search Name</label>
+                    <label class="block text-sm text-body mb-1">Search Name</label>
                     <input type="text" name="name" required autofocus
                            placeholder="e.g., Work emails this week"
-                           class="w-full px-3 py-2 border border-gray-700 rounded bg-gray-900 text-white placeholder-gray-600 focus:ring-2 focus:ring-primary">
+                           class="input-field w-full">
                 </div>
                 <div class="flex justify-end gap-3">
                     <button type="button" @click="showSaveModal = false"
-                            class="px-4 py-2 text-sm text-gray-400 hover:text-white">
+                            class="btn-secondary">
                         Cancel
                     </button>
                     <button type="submit"
-                            class="px-4 py-2 text-sm bg-primary text-white rounded hover:bg-primary/90">
+                            class="btn-primary">
                         Save
                     </button>
                 </div>

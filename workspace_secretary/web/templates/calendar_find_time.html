@@ -61,21 +61,21 @@
 ">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-white">Find a Time</h1>
-            <p class="text-sm text-gray-400 mt-1">Find available meeting slots that work for everyone</p>
+            <h1 class="h1">Find a Time</h1>
+            <p class="text-sm text-muted mt-1">Find available meeting slots that work for everyone</p>
         </div>
-        <a href="/calendar" class="px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
-            ← Back to Calendar
+        <a href="/calendar" class="text-sm text-muted hover:text-body transition-colors flex items-center gap-2">
+            <span>←</span> Back to Calendar
         </a>
     </div>
 
-    <div class="bg-gray-900 rounded-lg p-6 space-y-6">
+    <div class="card p-6 space-y-6">
         <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label class="block text-sm font-medium text-body mb-2">
                 Meeting Duration
             </label>
             <select x-model="duration" 
-                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                    class="input-field w-full">
                 <option value="15">15 minutes</option>
                 <option value="30">30 minutes</option>
                 <option value="45">45 minutes</option>
@@ -86,52 +86,52 @@
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label class="block text-sm font-medium text-body mb-2">
                 Attendees (comma-separated emails)
             </label>
             <input type="text" 
                    x-model="attendees"
                    placeholder="john@example.com, sarah@example.com"
-                   class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
-            <p class="text-xs text-gray-500 mt-1">Note: Currently checking only your availability</p>
+                   class="input-field w-full">
+            <p class="text-xs text-muted mt-1">Note: Currently checking only your availability</p>
         </div>
         
         <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label class="block text-sm font-medium text-body mb-2">
                 Recipient Timezones (optional, comma-separated)
             </label>
             <input type="text" 
                    x-model="recipientTimezones"
                    placeholder="America/New_York, Asia/Tokyo"
-                   class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
-            <p class="text-xs text-gray-500 mt-1">Show times in attendees' timezones for easier coordination</p>
+                   class="input-field w-full">
+            <p class="text-xs text-muted mt-1">Show times in attendees' timezones for easier coordination</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">
+                <label class="block text-sm font-medium text-body mb-2">
                     Start Date
                 </label>
                 <input type="date" 
                        x-model="dateRangeStart"
-                       class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                       class="input-field w-full">
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">
+                <label class="block text-sm font-medium text-body mb-2">
                     End Date
                 </label>
                 <input type="date" 
                        x-model="dateRangeEnd"
-                       class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                       class="input-field w-full">
             </div>
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-300 mb-2">
+            <label class="block text-sm font-medium text-body mb-2">
                 Timezone
             </label>
             <select x-model="timezone" 
-                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                    class="input-field w-full">
                 <option value="Europe/Amsterdam">Europe/Amsterdam (CET/CEST)</option>
                 <option value="America/New_York">New York (EST/EDT)</option>
                 <option value="America/Los_Angeles">Los Angeles (PST/PDT)</option>
@@ -144,7 +144,7 @@
 
         <button @click="findSlots()" 
                 :disabled="loading"
-                class="w-full px-4 py-3 bg-primary text-white font-medium rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
+                class="w-full btn-primary flex justify-center items-center gap-2">
             <span x-show="!loading">🔍 Find Available Times</span>
             <span x-show="loading">Searching...</span>
         </button>
@@ -152,58 +152,58 @@
 
     <div x-show="showResults" x-cloak class="space-y-4">
         <div class="flex items-center justify-between">
-            <h2 class="text-lg font-medium text-white">
+            <h2 class="h2">
                 Available Slots (<span x-text="slots.length"></span>)
             </h2>
-            <p class="text-sm text-gray-400">Showing slots during working hours (11:00 - 22:00)</p>
+            <p class="text-sm text-muted">Showing slots during working hours (11:00 - 22:00)</p>
         </div>
 
         <template x-if="slots.length === 0">
-            <div class="bg-gray-900 rounded-lg p-8 text-center">
-                <div class="text-4xl mb-4">📅</div>
-                <p class="text-gray-400">No available slots found in the selected date range</p>
-                <p class="text-sm text-gray-500 mt-2">Try expanding your date range or adjusting the duration</p>
+            <div>
+                {% with icon="📅", title="No available slots found", description="No slots found in the selected date range. Try expanding your search or adjusting the duration." %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
             </div>
         </template>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             <template x-for="slot in slots" :key="slot.start">
                 <button @click="selectSlot(slot)"
-                        class="bg-gray-900 rounded-lg p-4 text-left border-2 transition-colors"
-                        :class="selectedSlot?.start === slot.start ? 'border-primary bg-primary/10' : 'border-gray-800 hover:border-gray-700'">
+                        class="card p-4 text-left transition-colors border-2"
+                        :class="selectedSlot?.start === slot.start ? 'border-primary bg-primary/5' : 'border-transparent hover:border-primary/50'">
                     <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="text-sm font-medium text-white" x-text="slot.display"></div>
-                            <div class="text-xs text-gray-400 mt-1">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium text-body" x-text="slot.display"></div>
+                            <div class="text-xs text-muted mt-1">
                                 <span x-text="duration"></span> min meeting
                             </div>
-                            <div x-show="slot.recipient_times && slot.recipient_times.length > 0" class="mt-2 space-y-1">
+                            <div x-show="slot.recipient_times && slot.recipient_times.length > 0" class="mt-2 space-y-1 border-t border-border pt-2">
                                 <template x-for="rt in slot.recipient_times" :key="rt.timezone">
-                                    <div class="text-xs text-gray-500">
-                                        <span x-text="rt.timezone"></span>: <span x-text="rt.time" class="text-gray-400"></span>
+                                    <div class="text-xs text-muted truncate">
+                                        <span x-text="rt.timezone.split('/')[1] || rt.timezone"></span>: <span x-text="rt.time" class="text-body font-medium"></span>
                                     </div>
                                 </template>
                             </div>
                         </div>
-                        <div x-show="selectedSlot?.start === slot.start" class="text-primary">
+                        <div x-show="selectedSlot?.start === slot.start" class="text-primary ml-2 flex-shrink-0">
                             ✓
                         </div>
                     </div>
-                    <div x-show="slot.conflicts > 0" class="text-xs text-yellow-400 mt-2">
+                    <div x-show="slot.conflicts > 0" class="text-xs text-yellow-500 mt-2 font-medium">
                         ⚠️ <span x-text="slot.conflicts"></span> potential conflict(s)
                     </div>
                 </button>
             </template>
         </div>
 
-        <div x-show="selectedSlot" class="flex justify-end space-x-3">
+        <div x-show="selectedSlot" class="fixed bottom-6 right-6 z-20 flex gap-3 p-4 bg-surface border border-border rounded-xl shadow-2xl">
             <button @click="selectedSlot = null"
-                    class="px-4 py-2 text-sm text-gray-400 hover:text-white">
-                Clear Selection
+                    class="btn-secondary">
+                Cancel
             </button>
             <button @click="createEvent()"
-                    class="px-6 py-2 text-sm bg-primary text-white font-medium rounded hover:bg-primary/90">
-                Create Event at Selected Time
+                    class="btn-primary">
+                Create Event
             </button>
         </div>
     </div>

@@ -36,28 +36,28 @@
 
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center space-x-2">
-            <h1 class="text-xl font-bold">Calendar</h1>
-            <div class="flex bg-gray-800 rounded-md overflow-hidden">
+            <h1 class="h1">Calendar</h1>
+            <div class="flex bg-surface-subtle rounded-md overflow-hidden border border-border">
                 <a href="/calendar?view=week" 
-                   class="px-3 py-1 text-sm {% if view == 'week' %}bg-primary text-white{% else %}text-gray-400 hover:text-white{% endif %}">
+                   class="px-3 py-1 text-sm transition-colors {% if view == 'week' %}bg-primary text-white{% else %}text-muted hover:text-body hover:bg-surface-hover{% endif %}">
                     Week
                 </a>
                 <a href="/calendar?view=day" 
-                   class="px-3 py-1 text-sm {% if view == 'day' %}bg-primary text-white{% else %}text-gray-400 hover:text-white{% endif %}">
+                   class="px-3 py-1 text-sm transition-colors {% if view == 'day' %}bg-primary text-white{% else %}text-muted hover:text-body hover:bg-surface-hover{% endif %}">
                     Day
                 </a>
                 <a href="/calendar?view=month" 
-                   class="px-3 py-1 text-sm {% if view == 'month' %}bg-primary text-white{% else %}text-gray-400 hover:text-white{% endif %}">
+                   class="px-3 py-1 text-sm transition-colors {% if view == 'month' %}bg-primary text-white{% else %}text-muted hover:text-body hover:bg-surface-hover{% endif %}">
                     Month
                 </a>
                 <a href="/calendar?view=agenda" 
-                   class="px-3 py-1 text-sm {% if view == 'agenda' %}bg-primary text-white{% else %}text-gray-400 hover:text-white{% endif %}">
+                   class="px-3 py-1 text-sm transition-colors {% if view == 'agenda' %}bg-primary text-white{% else %}text-muted hover:text-body hover:bg-surface-hover{% endif %}">
                     Agenda
                 </a>
             </div>
             <button @click="showSettings = !showSettings" 
-                    class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded"
-                    :class="{ 'bg-gray-800 text-primary': showSettings }"
+                    class="btn-icon"
+                    :class="{ 'bg-surface-subtle text-primary': showSettings }"
                     title="Calendar settings">
                 ⚙️
             </button>
@@ -66,83 +66,83 @@
         <div class="flex items-center space-x-2">
             {% if view == 'week' %}
             <a href="/calendar?view=week&week_offset={{ week_offset - 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 ← Prev
             </a>
-            <span class="text-sm text-gray-400">
+            <span class="text-sm text-muted font-medium">
                 {{ week_start.strftime('%b %d') }} - {{ week_end.strftime('%b %d, %Y') }}
             </span>
             <a href="/calendar?view=week&week_offset={{ week_offset + 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 Next →
             </a>
             {% if week_offset != 0 %}
-            <a href="/calendar?view=week" class="px-3 py-1 text-sm text-blue-400 hover:text-blue-300">
+            <a href="/calendar?view=week" class="px-3 py-1 text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">
                 Today
             </a>
             {% endif %}
-            <a href="/calendar/find-time" class="px-3 py-1 text-sm bg-primary text-white rounded hover:bg-primary/90 ml-2">
+            <a href="/calendar/find-time" class="btn-primary no-underline ml-2">
                 🔍 Find a Time
             </a>
             {% elif view == 'day' %}
             <a href="/calendar?view=day&day_offset={{ day_offset - 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 ← Prev
             </a>
-            <span class="text-sm text-gray-400">
+            <span class="text-sm text-muted font-medium">
                 {{ target_day.strftime('%A, %B %d, %Y') }}
             </span>
             <a href="/calendar?view=day&day_offset={{ day_offset + 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 Next →
             </a>
             {% if day_offset != 0 %}
-            <a href="/calendar?view=day" class="px-3 py-1 text-sm text-blue-400 hover:text-blue-300">
+            <a href="/calendar?view=day" class="px-3 py-1 text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">
                 Today
             </a>
             {% endif %}
             {% elif view == 'month' %}
             <a href="/calendar?view=month&month_offset={{ month_offset - 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 ← Prev
             </a>
-            <span class="text-sm text-gray-400">
+            <span class="text-sm text-muted font-medium">
                 {{ month_name }}
             </span>
             <a href="/calendar?view=month&month_offset={{ month_offset + 1 }}" 
-               class="px-3 py-1 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded">
+               class="btn-icon text-sm">
                 Next →
             </a>
             {% if month_offset != 0 %}
-            <a href="/calendar?view=month" class="px-3 py-1 text-sm text-blue-400 hover:text-blue-300">
+            <a href="/calendar?view=month" class="px-3 py-1 text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">
                 This Month
             </a>
             {% endif %}
             {% elif view == 'agenda' %}
-            <span class="text-sm text-gray-400">Next 30 days</span>
+            <span class="text-sm text-muted">Next 30 days</span>
             {% endif %}
         </div>
     </div>
 
-    <div x-show="showSettings" x-cloak x-collapse class="bg-gray-900 border border-gray-800 rounded-lg p-4 space-y-4">
+    <div x-show="showSettings" x-cloak x-collapse class="card space-y-4">
         <div>
-            <h3 class="text-sm font-medium text-white mb-2">Calendars</h3>
+            <h3 class="h2 mb-2">Calendars</h3>
             <div class="space-y-2">
                 <label class="flex items-center space-x-2 cursor-pointer">
                     <input type="checkbox" 
                            x-model="visibleCalendars" 
                            value="primary"
-                           class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
-                    <span class="text-sm text-gray-300">Primary Calendar</span>
+                           class="rounded bg-surface-subtle border-border text-primary focus:ring-primary">
+                    <span class="text-sm text-body">Primary Calendar</span>
                 </label>
             </div>
         </div>
         
         <div>
-            <h3 class="text-sm font-medium text-white mb-2">Timezone</h3>
-            <div class="text-xs text-gray-400 mb-2">Primary: Europe/Amsterdam (CET/CEST)</div>
+            <h3 class="h2 mb-2">Timezone</h3>
+            <div class="text-xs text-muted mb-2">Primary: Europe/Amsterdam (CET/CEST)</div>
             <select x-model="secondaryTimezone" 
-                    class="w-full bg-gray-800 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:ring-1 focus:ring-primary">
+                    class="input-field text-sm">
                 <option value="">No secondary timezone</option>
                 <option value="America/New_York">New York (EST/EDT)</option>
                 <option value="America/Los_Angeles">Los Angeles (PST/PDT)</option>
@@ -154,40 +154,40 @@
         </div>
         
         <div>
-            <h3 class="text-sm font-medium text-white mb-2">Display</h3>
+            <h3 class="h2 mb-2">Display</h3>
             <label class="flex items-center space-x-2 cursor-pointer">
                 <input type="checkbox" 
                        x-model="showWorkingHours"
-                       class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
-                <span class="text-sm text-gray-300">Highlight working hours (11:00 - 22:00)</span>
+                       class="rounded bg-surface-subtle border-border text-primary focus:ring-primary">
+                <span class="text-sm text-body">Highlight working hours (11:00 - 22:00)</span>
             </label>
         </div>
     </div>
 
     {% if view == 'day' %}
-    <div class="bg-gray-900 rounded-lg overflow-hidden">
+    <div class="bg-surface rounded-lg overflow-hidden border border-border shadow-sm">
         <div class="grid grid-cols-[80px_1fr]">
-            <div class="border-r border-gray-800"></div>
-            <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
-                <span class="text-sm font-medium text-white">{{ target_day.strftime('%A, %B %d') }}</span>
+            <div class="border-r border-border"></div>
+            <div class="bg-surface-subtle px-4 py-2 border-b border-border">
+                <span class="text-sm font-medium text-body">{{ target_day.strftime('%A, %B %d') }}</span>
             </div>
             
             {% for hour in range(24) %}
-            <div class="border-r border-gray-800 px-2 py-2 text-xs text-gray-500 text-right"
-                 :class="{ 'bg-blue-950/20': showWorkingHours && isWorkingHour({{ hour }}) }">
+            <div class="border-r border-border px-2 py-2 text-xs text-muted text-right"
+                 :class="{ 'bg-blue-50/50 dark:bg-blue-950/20': showWorkingHours && isWorkingHour({{ hour }}) }">
                 {{ '%02d:00'|format(hour) }}
             </div>
-            <div class="border-t border-gray-800 min-h-[60px] relative"
-                 :class="{ 'bg-blue-950/10': showWorkingHours && isWorkingHour({{ hour }}) }">
+            <div class="border-t border-border min-h-[60px] relative"
+                 :class="{ 'bg-blue-50/30 dark:bg-blue-950/10': showWorkingHours && isWorkingHour({{ hour }}) }">
                 {% for event in day_events %}
                 {% if event.start.dateTime %}
                 {% set event_hour = event.start.dateTime[11:13]|int %}
                 {% if event_hour == hour %}
-                <div class="absolute left-0 right-0 mx-1 mt-1 bg-primary/20 border-l-2 border-primary rounded p-2 text-xs cursor-pointer hover:bg-primary/30"
+                <div class="absolute left-0 right-0 mx-1 mt-1 bg-primary/10 border-l-2 border-primary rounded p-2 text-xs cursor-pointer hover:bg-primary/20 transition-colors"
                      @click="openEventDetail({{ event|tojson }})">
-                    <div class="font-medium text-white">{{ event.start.dateTime[11:16] }} {{ event.summary }}</div>
+                    <div class="font-medium text-body">{{ event.start.dateTime[11:16] }} {{ event.summary }}</div>
                     {% if event.location %}
-                    <div class="text-gray-400 mt-1">📍 {{ event.location }}</div>
+                    <div class="text-muted mt-1 truncate">📍 {{ event.location }}</div>
                     {% endif %}
                     <template x-if="busy_slots && busy_slots.length > 0">
                         <div class="absolute inset-0 bg-red-500/10 pointer-events-none"></div>
@@ -202,29 +202,29 @@
     </div>
     
     {% elif view == 'month' %}
-    <div class="bg-gray-900 rounded-lg overflow-hidden">
-        <div class="grid grid-cols-7 border-b border-gray-800">
+    <div class="bg-surface rounded-lg overflow-hidden border border-border shadow-sm">
+        <div class="grid grid-cols-7 border-b border-border bg-surface-subtle">
             {% for day_name in ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
-            <div class="px-2 py-2 text-center text-xs font-medium text-gray-400">{{ day_name }}</div>
+            <div class="px-2 py-2 text-center text-xs font-medium text-muted">{{ day_name }}</div>
             {% endfor %}
         </div>
         
         {% for week in weeks %}
-        <div class="grid grid-cols-7 border-b border-gray-800">
+        <div class="grid grid-cols-7 border-b border-border last:border-b-0">
             {% for day in week %}
-            <div class="border-r border-gray-800 p-2 min-h-[100px] {% if not day.is_current_month %}bg-gray-950{% endif %} {% if day.is_today %}ring-1 ring-primary{% endif %}">
-                <div class="text-xs {% if day.is_today %}text-primary font-bold{% elif day.is_current_month %}text-gray-400{% else %}text-gray-600{% endif %} mb-1">
+            <div class="border-r border-border last:border-r-0 p-2 min-h-[100px] {% if not day.is_current_month %}bg-canvas/50{% endif %} {% if day.is_today %}ring-1 ring-primary inset-ring{% endif %}">
+                <div class="text-xs {% if day.is_today %}text-primary font-bold{% elif day.is_current_month %}text-muted{% else %}text-muted/50{% endif %} mb-1">
                     {{ day.day_num }}
                 </div>
                 <div class="space-y-1">
                     {% for event in day.events[:3] %}
-                    <div class="text-xs px-1 py-0.5 rounded bg-primary/20 text-primary truncate cursor-pointer hover:bg-primary/30"
+                    <div class="text-xs px-1 py-0.5 rounded bg-primary/10 text-primary truncate cursor-pointer hover:bg-primary/20 transition-colors"
                          @click="openEventDetail({{ event|tojson }})">
                         {{ event.start.dateTime[11:16] if event.start.dateTime else '' }} {{ event.summary }}
                     </div>
                     {% endfor %}
                     {% if day.events|length > 3 %}
-                    <div class="text-xs text-gray-500">+{{ day.events|length - 3 }} more</div>
+                    <div class="text-xs text-muted">+{{ day.events|length - 3 }} more</div>
                     {% endif %}
                 </div>
             </div>
@@ -236,27 +236,27 @@
     {% elif view == 'agenda' %}
     <div class="space-y-4">
         {% for date, events_list in grouped_events.items() %}
-        <div class="bg-gray-900 rounded-lg overflow-hidden">
-            <div class="bg-gray-800 px-4 py-2 border-b border-gray-700">
-                <span class="text-sm font-medium text-white">
+        <div class="card p-0 overflow-hidden">
+            <div class="bg-surface-subtle px-4 py-2 border-b border-border">
+                <span class="text-sm font-medium text-body">
                     {{ events_list[0].start.dateTime[:10] | strftime('%A, %B %d, %Y') }}
                 </span>
             </div>
-            <div class="divide-y divide-gray-800">
+            <div class="divide-y divide-border">
                 {% for event in events_list %}
-                <div class="px-4 py-3 hover:bg-gray-800 cursor-pointer"
+                <div class="px-4 py-3 hover:bg-surface-subtle cursor-pointer transition-colors"
                      @click="openEventDetail({{ event|tojson }})">
                     <div class="flex items-start justify-between">
                         <div class="flex-1">
-                            <div class="font-medium text-white">{{ event.summary }}</div>
+                            <div class="font-medium text-body">{{ event.summary }}</div>
                             {% if event.location %}
-                            <div class="text-sm text-gray-400 mt-1">📍 {{ event.location }}</div>
+                            <div class="text-sm text-muted mt-1">📍 {{ event.location }}</div>
                             {% endif %}
                             {% if event.attendees %}
-                            <div class="text-sm text-gray-500 mt-1">{{ event.attendees|length }} attendees</div>
+                            <div class="text-sm text-muted mt-1">{{ event.attendees|length }} attendees</div>
                             {% endif %}
                         </div>
-                        <div class="text-sm text-gray-400 ml-4">
+                        <div class="text-sm text-muted ml-4">
                             {% if event.start.dateTime %}
                             {{ event.start.dateTime[11:16] }}
                             {% if event.end.dateTime %}
@@ -270,37 +270,37 @@
             </div>
         </div>
         {% else %}
-        <div class="text-center py-12 text-gray-500">
-            No upcoming events in the next 30 days
-        </div>
+            {% with icon="📅", title="No upcoming events", description="No events scheduled for the next 30 days." %}
+                {% include "partials/empty_state.html" %}
+            {% endwith %}
         {% endfor %}
     </div>
     
     {% else %}
     <div class="grid grid-cols-7 gap-2">
         {% for day in days %}
-        <div class="bg-gray-900 rounded-lg p-3 min-h-[200px] {% if day.is_today %}ring-1 ring-primary{% endif %}">
+        <div class="card p-3 min-h-[200px] {% if day.is_today %}ring-2 ring-primary{% endif %}">
             <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-medium {% if day.is_today %}text-primary{% else %}text-gray-400{% endif %}">
+                <span class="text-sm font-medium {% if day.is_today %}text-primary{% else %}text-muted{% endif %}">
                     {{ day.name }}
                 </span>
-                <span class="text-xs text-gray-500">{{ day.short }}</span>
+                <span class="text-xs text-muted">{{ day.short }}</span>
             </div>
             <div class="space-y-1">
                 {% for event in day.events %}
-                <div class="text-xs p-2 rounded bg-gray-800 hover:bg-gray-700 cursor-pointer"
+                <div class="text-xs p-2 rounded bg-surface-subtle hover:bg-surface-hover cursor-pointer transition-colors"
                      @click="openEventDetail({{ event|tojson }})">
                     <div class="flex items-start justify-between">
-                        <span class="font-medium text-white truncate flex-1">{{ event.summary }}</span>
+                        <span class="font-medium text-body truncate flex-1">{{ event.summary }}</span>
                         {% if event.start.dateTime %}
-                        <span class="text-gray-500 ml-1">
+                        <span class="text-muted ml-1">
                             {{ event.start.dateTime[11:16] }}
                         </span>
                         {% endif %}
                     </div>
                 </div>
                 {% else %}
-                <p class="text-xs text-gray-600 italic">No events</p>
+                <p class="text-xs text-muted italic">No events</p>
                 {% endfor %}
             </div>
         </div>
@@ -310,57 +310,57 @@
 
     <div class="flex justify-end">
         <button @click="$dispatch('open-create-event')"
-                class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90">
+                class="btn-primary">
             + New Event
         </button>
     </div>
 
     <template x-if="showEventDetail && selectedEvent">
-        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showEventDetail = false">
-            <div class="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 sticky top-0 bg-gray-900">
-                    <h2 class="text-lg font-semibold text-white" x-text="selectedEvent?.summary"></h2>
-                    <button @click="showEventDetail = false" class="text-gray-400 hover:text-white p-1">✕</button>
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showEventDetail = false">
+            <div class="bg-surface rounded-xl shadow-2xl border border-border w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-surface rounded-t-xl sticky top-0">
+                    <h2 class="h2" x-text="selectedEvent?.summary"></h2>
+                    <button @click="showEventDetail = false" class="text-muted hover:text-body p-1 rounded-md hover:bg-surface-subtle">✕</button>
                 </div>
                 
-                <div class="p-4 space-y-4">
+                <div class="p-6 space-y-4 overflow-y-auto">
                     <div x-show="selectedEvent?.start?.dateTime" class="flex items-start space-x-3">
                         <span class="text-2xl">🕐</span>
                         <div>
-                            <div class="text-sm text-gray-400">Time</div>
-                            <div class="text-white">
+                            <div class="text-sm text-muted">Time</div>
+                            <div class="text-body">
                                 <span x-text="selectedEvent?.start?.dateTime ? new Date(selectedEvent.start.dateTime).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : ''"></span>
                             </div>
-                            <div class="text-white mt-1">
+                            <div class="text-body mt-1">
                                 <span x-text="selectedEvent?.start?.dateTime ? selectedEvent.start.dateTime.substring(11, 16) : ''"></span>
                                 <span x-show="selectedEvent?.end?.dateTime"> - </span>
                                 <span x-text="selectedEvent?.end?.dateTime ? selectedEvent.end.dateTime.substring(11, 16) : ''"></span>
                             </div>
                         </div>
                     </div>
-                    
+
                     <div x-show="selectedEvent?.description" class="flex items-start space-x-3">
                         <span class="text-2xl">📝</span>
                         <div class="flex-1">
-                            <div class="text-sm text-gray-400">Description</div>
-                            <div class="text-white whitespace-pre-wrap" x-text="selectedEvent?.description"></div>
+                            <div class="text-sm text-muted">Description</div>
+                            <div class="text-body whitespace-pre-wrap" x-text="selectedEvent?.description"></div>
                         </div>
                     </div>
                     
                     <div x-show="selectedEvent?.location" class="flex items-start space-x-3">
                         <span class="text-2xl">📍</span>
                         <div class="flex-1">
-                            <div class="text-sm text-gray-400">Location</div>
-                            <div class="text-white" x-text="selectedEvent?.location"></div>
+                            <div class="text-sm text-muted">Location</div>
+                            <div class="text-body" x-text="selectedEvent?.location"></div>
                         </div>
                     </div>
                     
                     <div x-show="selectedEvent?.hangoutLink" class="flex items-start space-x-3">
                         <span class="text-2xl">🎥</span>
                         <div class="flex-1">
-                            <div class="text-sm text-gray-400">Video Conference</div>
+                            <div class="text-sm text-muted">Video Conference</div>
                             <a :href="selectedEvent?.hangoutLink" target="_blank" 
-                               class="text-blue-400 hover:text-blue-300 underline">
+                               class="text-blue-600 dark:text-blue-400 hover:underline">
                                 Join Google Meet
                             </a>
                         </div>
@@ -369,24 +369,24 @@
                     <div x-show="selectedEvent?.attendees && selectedEvent.attendees.length > 0" class="flex items-start space-x-3">
                         <span class="text-2xl">👥</span>
                         <div class="flex-1">
-                            <div class="text-sm text-gray-400 mb-2">
+                            <div class="text-sm text-muted mb-2">
                                 Attendees (<span x-text="selectedEvent?.attendees?.length || 0"></span>)
                             </div>
                             <div class="space-y-2">
                                 <template x-for="attendee in selectedEvent?.attendees || []" :key="attendee.email">
                                     <div class="flex items-center justify-between text-sm">
                                         <div>
-                                            <span class="text-white" x-text="attendee.displayName || attendee.email"></span>
-                                            <span class="text-gray-500" x-show="attendee.displayName"> 
+                                            <span class="text-body" x-text="attendee.displayName || attendee.email"></span>
+                                            <span class="text-muted" x-show="attendee.displayName"> 
                                                 (<span x-text="attendee.email"></span>)
                                             </span>
                                         </div>
-                                        <span class="text-xs px-2 py-1 rounded"
+                                        <span class="badge"
                                               :class="{
-                                                  'bg-green-900/30 text-green-400': attendee.responseStatus === 'accepted',
-                                                  'bg-red-900/30 text-red-400': attendee.responseStatus === 'declined',
-                                                  'bg-yellow-900/30 text-yellow-400': attendee.responseStatus === 'tentative',
-                                                  'bg-gray-800 text-gray-400': attendee.responseStatus === 'needsAction'
+                                                  'badge-success': attendee.responseStatus === 'accepted',
+                                                  'badge-error': attendee.responseStatus === 'declined',
+                                                  'badge-warning': attendee.responseStatus === 'tentative',
+                                                  'badge-neutral': attendee.responseStatus === 'needsAction'
                                               }"
                                               x-text="attendee.responseStatus === 'accepted' ? 'Accepted' : 
                                                       attendee.responseStatus === 'declined' ? 'Declined' : 
@@ -397,12 +397,12 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div x-show="selectedEvent?.organizer" class="flex items-start space-x-3">
                         <span class="text-2xl">👤</span>
                         <div class="flex-1">
-                            <div class="text-sm text-gray-400">Organizer</div>
-                            <div class="text-white">
+                            <div class="text-sm text-muted">Organizer</div>
+                            <div class="text-body">
                                 <span x-text="selectedEvent?.organizer?.displayName || selectedEvent?.organizer?.email"></span>
                             </div>
                         </div>
@@ -411,136 +411,137 @@
                     <div x-show="selectedEvent?.htmlLink" class="flex items-start space-x-3">
                         <span class="text-2xl">🔗</span>
                         <div class="flex-1">
-                    <div class="text-sm text-gray-400">Calendar Link</div>
-                    <a :href="selectedEvent?.htmlLink" target="_blank" 
-                       class="text-blue-400 hover:text-blue-300 underline text-sm">
-                        View in Google Calendar
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="flex justify-between space-x-2 px-4 py-3 border-t border-gray-800 bg-gray-900 sticky bottom-0">
-            <button @click="$dispatch('propose-times', { event: selectedEvent })"
-                    class="px-4 py-2 text-sm bg-gray-800 text-white rounded hover:bg-gray-700">
-                📅 Propose New Times
-            </button>
-            <button @click="showEventDetail = false"
-                    class="px-4 py-2 text-sm text-gray-300 hover:text-white">
-                Close
-            </button>
-        </div>
-    </div>
-</template>
-
-<template x-if="$store.proposeTimesEvent">
-    <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
-         @click.self="$store.proposeTimesEvent = null"
-         x-data="{
-             proposedSlots: [],
-             message: '',
-             async proposeAlternatives() {
-                 const formData = new FormData();
-                 formData.append('event_id', $store.proposeTimesEvent.id);
-                 formData.append('proposed_times', JSON.stringify(proposedSlots));
-                 formData.append('message', message);
-                 
-                 try {
-                     const response = await fetch('/api/calendar/propose-times', {
-                         method: 'POST',
-                         body: formData
-                     });
-                     const data = await response.json();
-                     
-                     if (data.success) {
-                         window.showToast('Alternative times proposed', 'success');
-                         $store.proposeTimesEvent = null;
-                     } else {
-                         window.showToast(data.error || 'Failed to propose times', 'error');
-                     }
-                 } catch (error) {
-                     window.showToast('Error proposing times', 'error');
-                 }
-             },
-             addSlot() {
-                 const now = new Date();
-                 proposedSlots.push({
-                     start: now.toISOString().slice(0, 16),
-                     end: new Date(now.getTime() + 30 * 60000).toISOString().slice(0, 16)
-                 });
-             },
-             removeSlot(index) {
-                 proposedSlots.splice(index, 1);
-             }
-         }"
-         x-init="addSlot()"
-         @propose-times.window="$store.proposeTimesEvent = $event.detail.event">
-        <div class="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 sticky top-0 bg-gray-900">
-                <h2 class="text-lg font-semibold text-white">Propose Alternative Times</h2>
-                <button @click="$store.proposeTimesEvent = null" class="text-gray-400 hover:text-white p-1">✕</button>
-            </div>
-            
-            <div class="p-4 space-y-4">
-                <div class="bg-gray-800 rounded-lg p-3">
-                    <div class="text-sm text-gray-400">Current Event</div>
-                    <div class="text-white font-medium" x-text="$store.proposeTimesEvent?.summary"></div>
-                    <div class="text-sm text-gray-400 mt-1">
-                        <span x-text="$store.proposeTimesEvent?.start?.dateTime ? new Date($store.proposeTimesEvent.start.dateTime).toLocaleString() : ''"></span>
+                            <div class="text-sm text-muted">Calendar Link</div>
+                            <a :href="selectedEvent?.htmlLink" target="_blank" 
+                               class="text-blue-600 dark:text-blue-400 hover:underline text-sm">
+                                View in Google Calendar
+                            </a>
+                        </div>
                     </div>
                 </div>
                 
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">
-                        Proposed Alternative Times
-                    </label>
-                    <div class="space-y-3">
-                        <template x-for="(slot, index) in proposedSlots" :key="index">
-                            <div class="flex items-center gap-2">
-                                <input type="datetime-local" 
-                                       x-model="slot.start"
-                                       class="flex-1 bg-gray-800 text-white text-sm rounded px-3 py-2 border border-gray-700">
-                                <span class="text-gray-500">to</span>
-                                <input type="datetime-local" 
-                                       x-model="slot.end"
-                                       class="flex-1 bg-gray-800 text-white text-sm rounded px-3 py-2 border border-gray-700">
-                                <button @click="removeSlot(index)" 
-                                        class="p-2 text-red-400 hover:text-red-300">
-                                    ✕
-                                </button>
-                            </div>
-                        </template>
-                    </div>
-                    <button @click="addSlot()" 
-                            class="mt-2 px-3 py-1 text-sm text-blue-400 hover:text-blue-300">
-                        + Add Another Time Slot
+                <div class="flex justify-between space-x-2 px-6 py-4 border-t border-border bg-surface-subtle rounded-b-xl">
+                    <button @click="$dispatch('propose-times', { event: selectedEvent })"
+                            class="btn-secondary text-xs">
+                        📅 Propose New Times
+                    </button>
+                    <button @click="showEventDetail = false"
+                            class="btn-secondary">
+                        Close
                     </button>
                 </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-2">
-                        Message (optional)
-                    </label>
-                    <textarea x-model="message"
-                              rows="3"
-                              placeholder="Let attendees know why you're proposing new times..."
-                              class="w-full bg-gray-800 text-white text-sm rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
-                </div>
-            </div>
-            
-            <div class="flex justify-end space-x-2 px-4 py-3 border-t border-gray-800 bg-gray-900 sticky bottom-0">
-                <button @click="$store.proposeTimesEvent = null"
-                        class="px-4 py-2 text-sm text-gray-300 hover:text-white">
-                    Cancel
-                </button>
-                <button @click="proposeAlternatives()"
-                        class="px-4 py-2 text-sm bg-primary text-white rounded hover:bg-primary/90">
-                    Send Proposals
-                </button>
             </div>
         </div>
-    </div>
-</template>
+    </template>
+
+    <template x-if="$store.proposeTimesEvent">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" 
+             @click.self="$store.proposeTimesEvent = null"
+             x-data="{
+                 proposedSlots: [],
+                 message: '',
+                 async proposeAlternatives() {
+                     const formData = new FormData();
+                     formData.append('event_id', $store.proposeTimesEvent.id);
+                     formData.append('proposed_times', JSON.stringify(proposedSlots));
+                     formData.append('message', message);
+                     
+                     try {
+                         const response = await fetch('/api/calendar/propose-times', {
+                             method: 'POST',
+                             body: formData
+                         });
+                         const data = await response.json();
+                         
+                         if (data.success) {
+                             window.showToast('Alternative times proposed', 'success');
+                             $store.proposeTimesEvent = null;
+                         } else {
+                             window.showToast(data.error || 'Failed to propose times', 'error');
+                         }
+                     } catch (error) {
+                         window.showToast('Error proposing times', 'error');
+                     }
+                 },
+                 addSlot() {
+                     const now = new Date();
+                     proposedSlots.push({
+                         start: now.toISOString().slice(0, 16),
+                         end: new Date(now.getTime() + 30 * 60000).toISOString().slice(0, 16)
+                     });
+                 },
+                 removeSlot(index) {
+                     proposedSlots.splice(index, 1);
+                 }
+             }"
+             x-init="addSlot()"
+             @propose-times.window="$store.proposeTimesEvent = $event.detail.event">
+            <div class="bg-surface rounded-xl shadow-2xl border border-border w-full max-w-2xl max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-surface rounded-t-xl sticky top-0">
+                    <h2 class="h2">Propose Alternative Times</h2>
+                    <button @click="$store.proposeTimesEvent = null" class="text-muted hover:text-body p-1 rounded-md hover:bg-surface-subtle">✕</button>
+                </div>
+                
+                <div class="p-6 space-y-4 overflow-y-auto">
+                    <div class="card bg-surface-subtle">
+                        <div class="text-sm text-muted">Current Event</div>
+                        <div class="text-body font-medium" x-text="$store.proposeTimesEvent?.summary"></div>
+                        <div class="text-sm text-muted mt-1">
+                            <span x-text="$store.proposeTimesEvent?.start?.dateTime ? new Date($store.proposeTimesEvent.start.dateTime).toLocaleString() : ''"></span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-body mb-2">
+                            Proposed Alternative Times
+                        </label>
+                        <div class="space-y-3">
+                            <template x-for="(slot, index) in proposedSlots" :key="index">
+                                <div class="flex items-center gap-2">
+                                    <input type="datetime-local" 
+                                           x-model="slot.start"
+                                           class="flex-1 input-field text-sm">
+                                    <span class="text-muted">to</span>
+                                    <input type="datetime-local" 
+                                           x-model="slot.end"
+                                           class="flex-1 input-field text-sm">
+                                    <button @click="removeSlot(index)" 
+                                            class="p-2 text-red-500 hover:text-red-700">
+                                        ✕
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                        <button @click="addSlot()" 
+                                class="mt-2 btn-secondary text-sm">
+                            + Add Another Time Slot
+                        </button>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-body mb-2">
+                            Message (optional)
+                        </label>
+                        <textarea x-model="message"
+                                  rows="3"
+                                  placeholder="Let attendees know why you're proposing new times..."
+                                  class="input-field w-full"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-2 px-6 py-4 border-t border-border bg-surface-subtle rounded-b-xl">
+                    <button @click="$store.proposeTimesEvent = null"
+                            class="btn-secondary">
+                        Cancel
+                    </button>
+                    <button @click="proposeAlternatives()"
+                            class="btn-primary">
+                        Send Proposals
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
 </div>
 
 <script>

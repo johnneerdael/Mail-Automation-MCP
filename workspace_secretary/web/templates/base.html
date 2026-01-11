@@ -16,17 +16,83 @@
                     colors: {
                         primary: '#3b82f6',
                         secondary: '#64748b',
+                        // Semantic tokens
+                        canvas: 'var(--color-canvas)',
+                        surface: 'var(--color-surface)',
+                        'surface-subtle': 'var(--color-surface-subtle)',
+                        body: 'var(--color-body)',
+                        muted: 'var(--color-muted)',
+                        border: 'var(--color-border)',
+                        // Status colors
+                        success: '#22c55e', // green-500
+                        warning: '#eab308', // yellow-500
+                        error: '#ef4444',   // red-500
                     }
                 }
             }
         }
     </script>
-    <style>
-        [x-cloak] { display: none !important; }
-        .email-content img { max-width: 100%; height: auto; }
-        .email-content a { color: #60a5fa; text-decoration: underline; }
-        .search-highlight { background-color: #fbbf24; color: #000; padding: 2px 0; }
-        .search-highlight.current-match { background-color: #f97316; color: #fff; }
+    <style type="text/tailwindcss">
+        @layer base {
+            :root {
+                --color-canvas: #f9fafb; /* gray-50 */
+                --color-surface: #ffffff;
+                --color-surface-subtle: #f3f4f6; /* gray-100 */
+                --color-body: #111827; /* gray-900 */
+                --color-muted: #6b7280; /* gray-500 */
+                --color-border: #e5e7eb; /* gray-200 */
+            }
+            .dark {
+                --color-canvas: #030712; /* gray-950 */
+                --color-surface: #111827; /* gray-900 */
+                --color-surface-subtle: #1f2937; /* gray-800 */
+                --color-body: #f3f4f6; /* gray-100 */
+                --color-muted: #9ca3af; /* gray-400 */
+                --color-border: #1f2937; /* gray-800 */
+            }
+        }
+        
+        @layer components {
+            .btn-primary { 
+                @apply px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed;
+            }
+            .btn-secondary { 
+                @apply px-4 py-2 text-sm font-medium text-body bg-surface-subtle border border-border rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500;
+            }
+            .btn-danger {
+                @apply px-4 py-2 text-sm font-medium text-white bg-error rounded-md hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error;
+            }
+            .btn-icon { 
+                @apply p-2 text-muted hover:text-body rounded-md hover:bg-surface-subtle transition-colors; 
+            }
+            .input-field { 
+                @apply w-full px-3 py-2 bg-surface-subtle border border-border rounded-md text-body placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow; 
+            }
+            .card { 
+                @apply bg-surface border border-border rounded-lg shadow-sm p-4 sm:p-6; 
+            }
+            .badge { 
+                @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; 
+            }
+            .badge-success { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400; }
+            .badge-warning { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400; }
+            .badge-error { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400; }
+            .badge-neutral { @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300; }
+            .badge-info { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400; }
+            
+            /* Typography */
+            .h1 { @apply text-2xl font-bold text-body; }
+            .h2 { @apply text-lg font-semibold text-body; }
+            .text-subtle { @apply text-sm text-muted; }
+        }
+
+        @layer utilities {
+            [x-cloak] { display: none !important; }
+            .email-content img { max-width: 100%; height: auto; }
+            .email-content a { color: #60a5fa; text-decoration: underline; }
+            .search-highlight { background-color: #fbbf24; color: #000; padding: 2px 0; }
+            .search-highlight.current-match { background-color: #f97316; color: #fff; }
+        }
     </style>
 
 </head>
@@ -58,10 +124,23 @@
     }
 }" x-init="if(!darkMode) document.documentElement.classList.remove('dark'); else document.documentElement.classList.add('dark')" :class="{ 'bg-gray-50 text-gray-900': !darkMode, 'bg-gray-950 text-gray-100': darkMode }">
     <div class="min-h-full">
-        <nav class="bg-gray-900 border-b border-gray-800" :class="{ 'bg-white border-gray-200': !darkMode, 'bg-gray-900 border-gray-800': darkMode }">
+        <nav class="bg-gray-900 border-b border-gray-800" :class="{ 'bg-white border-gray-200': !darkMode, 'bg-gray-900 border-gray-800': darkMode }" x-data="{ mobileMenuOpen: false }">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16">
                     <div class="flex">
+                        <div class="flex items-center sm:hidden mr-2">
+                            <button @click="mobileMenuOpen = !mobileMenuOpen" type="button" 
+                                    class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                                    :class="{ 'hover:bg-gray-100': !darkMode, 'hover:bg-gray-800 hover:text-white': darkMode }">
+                                <span class="sr-only">Open main menu</span>
+                                <svg x-show="!mobileMenuOpen" class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                                <svg x-show="mobileMenuOpen" x-cloak class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                         <div class="flex-shrink-0 flex items-center">
                             <a href="/inbox" class="text-xl font-bold">
                                 📧 Secretary
@@ -114,7 +193,6 @@
                                     </template>
                                     <template x-for="n in notifications" :key="n.uid || n.id">
                                         <div>
-                                            <!-- Email notification -->
                                             <template x-if="n.type === 'email'">
                                                 <a :href="'/thread/' + n.folder + '/' + n.uid"
                                                    class="block px-4 py-3 hover:bg-gray-700 border-b border-gray-700/50">
@@ -125,7 +203,6 @@
                                                     <p class="text-sm text-gray-400 truncate" x-text="n.subject"></p>
                                                 </a>
                                             </template>
-                                            <!-- Calendar reminder notification -->
                                             <template x-if="n.type === 'calendar'">
                                                 <a href="/calendar"
                                                    class="block px-4 py-3 hover:bg-gray-700 border-b border-gray-700/50 bg-purple-900/20">
@@ -151,6 +228,29 @@
                             <span x-show="darkMode" x-cloak>☀️</span>
                         </button>
                     </div>
+                </div>
+            </div>
+
+            <div x-show="mobileMenuOpen" x-cloak class="sm:hidden border-t border-gray-700" id="mobile-menu">
+                <div class="pt-2 pb-3 space-y-1">
+                    <a href="/inbox" class="bg-gray-900 border-primary text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'bg-gray-50 border-primary text-primary': !darkMode, 'bg-gray-800 border-primary text-white': darkMode }">
+                        Inbox
+                    </a>
+                    <a href="/calendar" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                        Calendar
+                    </a>
+                    <a href="/contacts" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                        Contacts
+                    </a>
+                    <a href="/chat" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                        🤖 Assistant
+                    </a>
+                    <a href="/search" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                        Search
+                    </a>
+                    <a href="/settings" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                        ⚙️ Settings
+                    </a>
                 </div>
             </div>
         </nav>

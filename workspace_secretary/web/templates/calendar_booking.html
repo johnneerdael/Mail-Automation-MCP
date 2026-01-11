@@ -58,28 +58,28 @@
         }
     }
 }" x-init="loadSlots()">
-    <div class="bg-gray-900 rounded-lg p-6">
+    <div class="card p-6">
         <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold text-white mb-2">Book a Meeting</h1>
-            <p class="text-gray-400">Select a time that works for you</p>
+            <h1 class="text-2xl font-bold mb-2">Book a Meeting</h1>
+            <p class="text-muted">Select a time that works for you</p>
         </div>
 
         <div class="flex items-center justify-center mb-8">
             <div class="flex items-center">
-                <div class="flex items-center justify-center w-8 h-8 rounded-full"
-                     :class="step >= 1 ? 'bg-primary text-white' : 'bg-gray-800 text-gray-400'">
+                <div class="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+                     :class="step >= 1 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
                     1
                 </div>
                 <div class="w-16 h-0.5"
-                     :class="step >= 2 ? 'bg-primary' : 'bg-gray-800'"></div>
-                <div class="flex items-center justify-center w-8 h-8 rounded-full"
-                     :class="step >= 2 ? 'bg-primary text-white' : 'bg-gray-800 text-gray-400'">
+                     :class="step >= 2 ? 'bg-primary' : 'bg-border'"></div>
+                <div class="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+                     :class="step >= 2 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
                     2
                 </div>
                 <div class="w-16 h-0.5"
-                     :class="step >= 3 ? 'bg-primary' : 'bg-gray-800'"></div>
-                <div class="flex items-center justify-center w-8 h-8 rounded-full"
-                     :class="step >= 3 ? 'bg-primary text-white' : 'bg-gray-800 text-gray-400'">
+                     :class="step >= 3 ? 'bg-primary' : 'bg-border'"></div>
+                <div class="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+                     :class="step >= 3 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'">
                     3
                 </div>
             </div>
@@ -88,23 +88,23 @@
         <div x-show="step === 1">
             <div x-show="loading" class="text-center py-8">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                <p class="text-gray-400 mt-4">Loading available times...</p>
+                <p class="text-muted mt-4">Loading available times...</p>
             </div>
 
             <div x-show="!loading && slots.length === 0" class="text-center py-8">
                 <div class="text-4xl mb-4">📅</div>
-                <p class="text-gray-400">No available slots at this time</p>
-                <p class="text-sm text-gray-500 mt-2">Please check back later or contact directly</p>
+                <p class="text-muted">No available slots at this time</p>
+                <p class="text-sm text-muted mt-2">Please check back later or contact directly</p>
             </div>
 
             <div x-show="!loading && slots.length > 0" class="space-y-4">
-                <h3 class="text-lg font-medium text-white">Available Times</h3>
+                <h3 class="text-lg font-medium">Available Times</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <template x-for="slot in slots" :key="slot.start">
                         <button @click="selectSlot(slot)"
-                                class="bg-gray-800 rounded-lg p-4 text-left border-2 border-gray-700 hover:border-primary transition-colors">
-                            <div class="text-sm font-medium text-white" x-text="slot.display"></div>
-                            <div class="text-xs text-gray-400 mt-1">30 min meeting</div>
+                                class="bg-surface-dim hover:bg-surface-hover rounded-lg p-4 text-left border border-border hover:border-primary transition-colors">
+                            <div class="text-sm font-medium" x-text="slot.display"></div>
+                            <div class="text-xs text-muted mt-1">30 min meeting</div>
                         </button>
                     </template>
                 </div>
@@ -112,49 +112,49 @@
         </div>
 
         <div x-show="step === 2" class="space-y-4">
-            <div class="bg-gray-800 rounded-lg p-4 mb-6">
-                <div class="text-sm text-gray-400">Selected Time</div>
-                <div class="text-white font-medium" x-text="selectedSlot?.display"></div>
+            <div class="bg-surface-dim rounded-lg p-4 mb-6 border border-border">
+                <div class="text-sm text-muted">Selected Time</div>
+                <div class="font-medium" x-text="selectedSlot?.display"></div>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">
-                    Your Name <span class="text-red-400">*</span>
+                <label class="block text-sm font-medium text-muted mb-2">
+                    Your Name <span class="text-red-500">*</span>
                 </label>
                 <input type="text" 
                        x-model="name"
                        placeholder="John Doe"
-                       class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                       class="input-field w-full">
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">
-                    Your Email <span class="text-red-400">*</span>
+                <label class="block text-sm font-medium text-muted mb-2">
+                    Your Email <span class="text-red-500">*</span>
                 </label>
                 <input type="email" 
                        x-model="email"
                        placeholder="john@example.com"
-                       class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent">
+                       class="input-field w-full">
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-gray-300 mb-2">
+                <label class="block text-sm font-medium text-muted mb-2">
                     Notes (optional)
                 </label>
                 <textarea x-model="notes"
                           rows="3"
                           placeholder="What would you like to discuss?"
-                          class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700 focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
+                          class="input-field w-full"></textarea>
             </div>
 
             <div class="flex space-x-3 pt-4">
                 <button @click="step = 1; selectedSlot = null"
-                        class="flex-1 px-4 py-3 text-gray-300 hover:text-white border border-gray-700 rounded hover:border-gray-600">
+                        class="flex-1 px-4 py-3 btn-secondary">
                     ← Back
                 </button>
                 <button @click="bookMeeting()"
                         :disabled="!name || !email"
-                        class="flex-1 px-4 py-3 bg-primary text-white font-medium rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
+                        class="flex-1 px-4 py-3 btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                     Confirm Booking
                 </button>
             </div>
@@ -162,14 +162,14 @@
 
         <div x-show="step === 3" class="text-center py-8">
             <div class="text-6xl mb-4">✅</div>
-            <h2 class="text-2xl font-bold text-white mb-2">Meeting Booked!</h2>
-            <p class="text-gray-400 mb-4">You'll receive a calendar invitation at <span class="text-white" x-text="email"></span></p>
-            <div class="bg-gray-800 rounded-lg p-4 mb-6 text-left">
-                <div class="text-sm text-gray-400">Meeting Details</div>
-                <div class="text-white font-medium mt-2" x-text="selectedSlot?.display"></div>
-                <div class="text-gray-400 text-sm mt-1">Duration: 30 minutes</div>
+            <h2 class="text-2xl font-bold mb-2">Meeting Booked!</h2>
+            <p class="text-muted mb-4">You'll receive a calendar invitation at <span class="text-default font-medium" x-text="email"></span></p>
+            <div class="bg-surface-dim rounded-lg p-4 mb-6 text-left border border-border">
+                <div class="text-sm text-muted">Meeting Details</div>
+                <div class="font-medium mt-2" x-text="selectedSlot?.display"></div>
+                <div class="text-muted text-sm mt-1">Duration: 30 minutes</div>
             </div>
-            <p class="text-sm text-gray-500">Please check your email for the meeting details and calendar invite.</p>
+            <p class="text-sm text-muted">Please check your email for the meeting details and calendar invite.</p>
         </div>
     </div>
 </div>

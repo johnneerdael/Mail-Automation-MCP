@@ -3,50 +3,47 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto space-y-6" x-data="{ showNoteForm: false, newNote: '' }">
-    <!-- Back Button -->
     <div>
-        <a href="/contacts" class="text-sm text-gray-400 hover:text-gray-200 flex items-center gap-2">
+        <a href="/contacts" class="text-sm text-muted hover:text-body flex items-center gap-2 transition-colors">
             <span>←</span> Back to Contacts
         </a>
     </div>
 
-    <!-- Contact Header -->
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <div class="card p-6">
         <div class="flex items-start justify-between">
             <div class="flex-1">
                 <div class="flex items-center gap-3">
-                    <h1 class="text-2xl font-bold text-gray-100">
+                    <h1 class="h1">
                         {{ contact['display_name'] or contact['email'] }}
                     </h1>
                     <button 
                         hx-post="/api/contacts/{{ contact['id'] }}/vip?is_vip={{ 'false' if contact['is_vip'] else 'true' }}"
                         hx-swap="none"
                         hx-on::after-request="window.location.reload()"
-                        class="text-2xl hover:scale-110 transition-transform"
+                        class="text-2xl hover:scale-110 transition-transform focus:outline-none"
                         title="{{ 'Remove from VIP' if contact['is_vip'] else 'Mark as VIP' }}">
                         {{ '★' if contact['is_vip'] else '☆' }}
                     </button>
                 </div>
-                <p class="text-base text-gray-400 mt-1">{{ contact['email'] }}</p>
+                <p class="text-base text-muted mt-1">{{ contact['email'] }}</p>
                 {% if contact['organization'] %}
-                <p class="text-sm text-gray-500 mt-1">{{ contact['organization'] }}</p>
+                <p class="text-sm text-muted mt-1">{{ contact['organization'] }}</p>
                 {% endif %}
             </div>
             <a href="/inbox?search=from:{{ contact['email'] }}" 
-               class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90">
+               class="btn-primary text-sm">
                 View in Inbox
             </a>
         </div>
 
-        <!-- Stats -->
-        <div class="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-800">
+        <div class="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-border">
             <div>
-                <p class="text-xs text-gray-500 uppercase tracking-wider">Total Emails</p>
-                <p class="text-2xl font-bold text-gray-100 mt-1">{{ contact['email_count'] }}</p>
+                <p class="text-xs text-muted uppercase tracking-wider">Total Emails</p>
+                <p class="text-2xl font-bold text-body mt-1">{{ contact['email_count'] }}</p>
             </div>
             <div>
-                <p class="text-xs text-gray-500 uppercase tracking-wider">First Contact</p>
-                <p class="text-sm text-gray-300 mt-1">
+                <p class="text-xs text-muted uppercase tracking-wider">First Contact</p>
+                <p class="text-sm text-body mt-1">
                     {% if contact['first_email_date'] %}
                     {{ contact['first_email_date'].strftime('%b %d, %Y') }}
                     {% else %}
@@ -55,8 +52,8 @@
                 </p>
             </div>
             <div>
-                <p class="text-xs text-gray-500 uppercase tracking-wider">Last Contact</p>
-                <p class="text-sm text-gray-300 mt-1">
+                <p class="text-xs text-muted uppercase tracking-wider">Last Contact</p>
+                <p class="text-sm text-body mt-1">
                     {% if contact['last_email_date'] %}
                     {{ contact['last_email_date'].strftime('%b %d, %Y') }}
                     {% else %}
@@ -67,29 +64,27 @@
         </div>
     </div>
 
-    <!-- Notes Section -->
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
+    <div class="card p-6">
         <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold text-gray-100">Notes</h2>
+            <h2 class="h2">Notes</h2>
             <button 
                 @click="showNoteForm = !showNoteForm"
-                class="px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary hover:text-white transition-colors">
+                class="btn-secondary text-sm">
                 <span x-show="!showNoteForm">+ Add Note</span>
                 <span x-show="showNoteForm" x-cloak>Cancel</span>
             </button>
         </div>
 
-        <!-- Add Note Form -->
-        <div x-show="showNoteForm" x-cloak class="mb-4 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+        <div x-show="showNoteForm" x-cloak class="mb-4 p-4 bg-surface-subtle border border-border rounded-lg">
             <textarea 
                 x-model="newNote"
                 placeholder="Enter your note..."
                 rows="3"
-                class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+                class="input-field w-full"></textarea>
             <div class="flex justify-end gap-2 mt-3">
                 <button 
                     @click="showNoteForm = false; newNote = ''"
-                    class="px-4 py-2 text-sm font-medium text-gray-400 hover:text-gray-200">
+                    class="btn-secondary">
                     Cancel
                 </button>
                 <button 
@@ -104,63 +99,64 @@
                                 }
                             });
                     }"
-                    class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90">
+                    class="btn-primary">
                     Save Note
                 </button>
             </div>
         </div>
 
-        <!-- Notes List -->
         <div class="space-y-3">
             {% for note in notes %}
-            <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
-                <p class="text-sm text-gray-300 whitespace-pre-wrap">{{ note['note'] }}</p>
-                <p class="text-xs text-gray-500 mt-2">{{ note['created_at'].strftime('%b %d, %Y at %I:%M %p') }}</p>
+            <div class="p-4 bg-surface-subtle border border-border rounded-lg">
+                <p class="text-sm text-body whitespace-pre-wrap">{{ note['note'] }}</p>
+                <p class="text-xs text-muted mt-2">{{ note['created_at'].strftime('%b %d, %Y at %I:%M %p') }}</p>
             </div>
             {% endfor %}
             {% if not notes %}
-            <p class="text-sm text-gray-500 text-center py-4">No notes yet. Add your first note to keep track of important details.</p>
+                {% with icon="📝", title="No notes yet", description="Add a note to keep track of important details." %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
             {% endif %}
         </div>
     </div>
 
-    <!-- Email Interaction History -->
-    <div class="bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <h2 class="text-lg font-semibold text-gray-100 mb-4">Email History</h2>
+    <div class="card p-6">
+        <h2 class="h2 mb-4">Email History</h2>
         
         <div class="space-y-3">
             {% for interaction in interactions %}
             <a href="/thread/{{ interaction['email_folder'] }}/{{ interaction['email_uid'] }}" 
-               class="block p-4 bg-gray-800 border border-gray-700 rounded-lg hover:border-primary transition-colors">
+               class="block p-4 bg-surface-subtle border border-border rounded-lg hover:border-primary transition-colors group">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="text-xs font-medium px-2 py-0.5 rounded-full
-                                {% if interaction['direction'] == 'sent' %}bg-blue-900/50 text-blue-400
-                                {% elif interaction['direction'] == 'received' %}bg-green-900/50 text-green-400
-                                {% elif interaction['direction'] == 'cc' %}bg-gray-700 text-gray-400
-                                {% else %}bg-gray-700 text-gray-400{% endif %}">
+                            <span class="badge 
+                                {% if interaction['direction'] == 'sent' %}badge-info
+                                {% elif interaction['direction'] == 'received' %}badge-success
+                                {% else %}badge-neutral{% endif %}">
                                 {{ interaction['direction'].upper() }}
                             </span>
-                            <span class="text-xs text-gray-500">
+                            <span class="text-xs text-muted">
                                 {{ interaction['email_date'].strftime('%b %d, %Y at %I:%M %p') }}
                             </span>
                         </div>
-                        <p class="text-sm font-medium text-gray-200 truncate">
+                        <p class="text-sm font-medium text-body truncate group-hover:text-primary transition-colors">
                             {{ interaction['subject'] or '(No subject)' }}
                         </p>
                     </div>
-                    <span class="text-gray-500">→</span>
+                    <span class="text-muted group-hover:text-primary transition-colors">→</span>
                 </div>
             </a>
             {% endfor %}
             {% if not interactions %}
-            <p class="text-sm text-gray-500 text-center py-8">No email history found.</p>
+                {% with icon="📧", title="No email history", description="No email interactions found with this contact." %}
+                    {% include "partials/empty_state.html" %}
+                {% endwith %}
             {% endif %}
         </div>
 
         {% if interactions and interactions|length == 100 %}
-        <p class="text-xs text-gray-500 text-center mt-4 pt-4 border-t border-gray-800">
+        <p class="text-xs text-muted text-center mt-4 pt-4 border-t border-border">
             Showing most recent 100 emails
         </p>
         {% endif %}

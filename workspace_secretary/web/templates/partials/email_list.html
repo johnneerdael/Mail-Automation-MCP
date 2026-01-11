@@ -1,14 +1,13 @@
-<!-- HTMX partial for email list rows -->
 <div id="email-list-rows">
     {% for email in emails %}
-    <div class="flex items-start hover:bg-gray-800 active:bg-gray-700 transition-colors">
+    <div class="flex items-start hover:bg-surface-hover active:bg-surface-active transition-colors border-b border-border last:border-0">
         <label class="flex items-center px-3 py-4 cursor-pointer touch-manipulation self-stretch">
             <input type="checkbox" 
                    value="{{ email.uid }}"
                    data-folder="{{ email.folder }}"
                    @change="toggleSelect('{{ email.uid }}', '{{ email.folder }}', $event.target.checked)"
                    :checked="isSelected('{{ email.uid }}')"
-                   class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
+                   class="rounded bg-surface border-border text-primary focus:ring-primary">
         </label>
         <a href="/thread/{{ email.folder }}/{{ email.uid }}" 
            class="flex-1 py-3 pr-3 sm:pr-4 touch-manipulation">
@@ -22,22 +21,22 @@
                     
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between sm:justify-start gap-2">
-                            <p class="text-sm font-medium truncate {% if email.is_unread %}text-white{% else %}text-gray-300{% endif %}">
+                            <p class="text-sm font-medium truncate {% if email.is_unread %}text-default font-semibold{% else %}text-muted-foreground{% endif %}">
                                 {{ email.from_name or email.from_addr }}
                             </p>
                             <div class="flex items-center gap-1 sm:hidden flex-shrink-0">
                                 {% if email.has_attachments %}
-                                <span class="text-gray-500 text-xs">📎</span>
+                                <span class="text-muted text-xs">📎</span>
                                 {% endif %}
-                                <span class="text-xs text-gray-500">{{ email.date }}</span>
+                                <span class="text-xs text-muted">{{ email.date }}</span>
                             </div>
                         </div>
                         
-                        <p class="text-sm truncate mt-0.5 {% if email.is_unread %}text-white font-semibold{% else %}text-gray-300{% endif %}">
+                        <p class="text-sm truncate mt-0.5 {% if email.is_unread %}text-default font-semibold{% else %}text-muted-foreground{% endif %}">
                             {{ email.subject }}
                         </p>
                         {% if email.preview %}
-                        <p class="text-xs sm:text-sm text-gray-500 truncate mt-0.5 hidden sm:block">
+                        <p class="text-xs sm:text-sm text-muted truncate mt-0.5 hidden sm:block">
                             {{ email.preview }}
                         </p>
                         {% endif %}
@@ -46,9 +45,9 @@
                 
                 <div class="hidden sm:flex ml-4 items-center space-x-2 flex-shrink-0">
                     {% if email.has_attachments %}
-                    <span class="text-gray-500" title="Has attachments">📎</span>
+                    <span class="text-muted" title="Has attachments">📎</span>
                     {% endif %}
-                    <span class="text-sm text-gray-500">{{ email.date }}</span>
+                    <span class="text-sm text-muted">{{ email.date }}</span>
                 </div>
             </div>
         </a>
@@ -57,47 +56,11 @@
 </div>
 
 {% if has_more %}
-<div class="px-4 py-3 text-center">
+<div class="px-4 py-3 text-center border-t border-border">
     <button hx-get="/api/emails?page={{ page + 1 }}"
             hx-target="this"
             hx-swap="outerHTML"
-            class="text-sm text-primary hover:text-primary/80">
-        Load more...
-    </button>
-</div>
-{% endif %}
-                
-                <p class="text-sm font-medium text-gray-900 dark:text-white truncate w-48 flex-shrink-0 {% if email.is_unread %}font-semibold{% endif %}">
-                    {{ email.from_name or email.from_addr }}
-                </p>
-                
-                <div class="ml-4 min-w-0 flex-1">
-                    <p class="text-sm text-gray-900 dark:text-white truncate {% if email.is_unread %}font-semibold{% endif %}">
-                        {{ email.subject }}
-                        {% if email.preview %}
-                        <span class="text-gray-500 dark:text-gray-400 font-normal"> — {{ email.preview }}</span>
-                        {% endif %}
-                    </p>
-                </div>
-            </div>
-            
-            <div class="ml-4 flex items-center space-x-2 flex-shrink-0">
-                {% if email.has_attachments %}
-                <span class="text-gray-400" title="Has attachments">📎</span>
-                {% endif %}
-                <span class="text-sm text-gray-500 dark:text-gray-400">{{ email.date }}</span>
-            </div>
-        </div>
-    </div>
-</a>
-{% endfor %}
-
-{% if has_more %}
-<div class="px-4 py-3 text-center">
-    <button hx-get="/api/emails?page={{ page + 1 }}"
-            hx-target="this"
-            hx-swap="outerHTML"
-            class="text-sm text-primary hover:text-primary/80">
+            class="text-sm text-primary hover:text-primary/80 font-medium">
         Load more...
     </button>
 </div>

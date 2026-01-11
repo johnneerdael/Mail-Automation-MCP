@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0] - 2026-01-11
+
+### Changed
+
+- **Frontend Overhaul (Sprint 3)**: Complete modernization of the web interface
+  - **Semantic Design System**: All templates now use standard CSS components (`.card`, `.btn-primary`, `.input-field`) defined in `base.html`
+  - **Dark Mode Consistency**: Full support for light/dark themes using semantic color variables (`bg-surface`, `text-muted`)
+  - **Refactored Pages**:
+    - `auth/login.html`: Modern card-based layout with clean typography (fixed pre-commit issues)
+    - `calendar_booking.html`: Step-by-step wizard interface for meeting booking
+    - `admin.html`: System dashboard with health indicators, status cards, and consistent tables
+    - `chat.html`: Polished AI assistant interface with message bubbles and typing indicators
+  - **Enhanced Partials**:
+    - Unified email list row styling with consistent selection logic
+    - New settings panels for Filters, Identity, Reminders, and Working Hours
+    - Styled search suggestions dropdown
+
 ## [4.4.0] - 2026-01-10
 
 ### Added

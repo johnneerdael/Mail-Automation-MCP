@@ -1,0 +1,18 @@
+<div class="flex flex-col items-center justify-center py-12 text-center p-4">
+    {% if icon %}
+    <div class="text-4xl mb-4 text-muted select-none">
+        {{ icon }}
+    </div>
+    {% endif %}
+    <h3 class="h2 mb-2">{{ title }}</h3>
+    {% if description %}
+    <p class="text-subtle max-w-sm mx-auto">{{ description }}</p>
+    {% endif %}
+    {% if action_url and action_text %}
+    <div class="mt-6">
+        <a href="{{ action_url }}" class="btn-primary no-underline">
+            {{ action_text }}
+        </a>
+    </div>
+    {% endif %}
+</div>

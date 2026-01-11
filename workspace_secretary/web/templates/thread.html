@@ -41,7 +41,7 @@
             range.setEnd(match.node, match.end);
             
             const mark = document.createElement('mark');
-            mark.className = 'search-highlight';
+            mark.className = 'bg-yellow-500/50 text-white rounded px-0.5 search-highlight';
             mark.dataset.matchIndex = index;
             range.surroundContents(mark);
         });
@@ -73,9 +73,10 @@
     },
     scrollToMatch(index) {
         document.querySelectorAll('.search-highlight').forEach((mark, i) => {
-            mark.classList.toggle('current-match', i === index);
+            mark.classList.toggle('ring-2', i === index);
+            mark.classList.toggle('ring-primary', i === index);
         });
-        const current = document.querySelector('.search-highlight.current-match');
+        const current = document.querySelectorAll('.search-highlight')[index];
         if (current) {
             current.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -86,94 +87,94 @@
     <div class="flex-1 space-y-4 min-w-0">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div class="flex items-start space-x-3 sm:space-x-4 min-w-0">
-                <a href="/inbox{{ '?unread=true' if unread_only else '' }}" class="mt-1 text-gray-400 hover:text-gray-200 flex-shrink-0 touch-manipulation p-1 -ml-1">
+                <a href="/inbox{{ '?unread=true' if unread_only else '' }}" class="mt-1 btn-icon flex-shrink-0 -ml-1">
                     ←
                 </a>
                 <div class="flex items-center space-x-1 mt-1 flex-shrink-0">
                     {% if neighbors.next %}
                     <a href="/thread/{{ folder }}/{{ neighbors.next }}?unread_only={{ 'true' if unread_only else 'false' }}" 
-                       class="text-gray-400 hover:text-white p-1 touch-manipulation" title="Newer">
+                       class="btn-icon" title="Newer">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                     </a>
                     {% else %}
-                    <span class="text-gray-700 p-1 cursor-not-allowed">
+                    <span class="p-2 text-muted/50 cursor-not-allowed">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
                     </span>
                     {% endif %}
 
                     {% if neighbors.prev %}
                     <a href="/thread/{{ folder }}/{{ neighbors.prev }}?unread_only={{ 'true' if unread_only else 'false' }}" 
-                       class="text-gray-400 hover:text-white p-1 touch-manipulation" title="Older">
+                       class="btn-icon" title="Older">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </a>
                     {% else %}
-                    <span class="text-gray-700 p-1 cursor-not-allowed">
+                    <span class="p-2 text-muted/50 cursor-not-allowed">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </span>
                     {% endif %}
                 </div>
-                <h1 class="text-lg sm:text-xl font-bold break-words">{{ subject }}</h1>
+                <h1 class="h2 break-words text-body">{{ subject }}</h1>
             </div>
             <div class="flex items-center space-x-1 sm:space-x-2 flex-shrink-0 ml-6 sm:ml-0">
                 <button @click="showSearch = !showSearch; showSearch && $nextTick(() => $refs.searchInput?.focus())"
-                        class="p-2 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md touch-manipulation"
-                        :class="{ 'bg-gray-800 text-primary': showSearch }"
+                        class="btn-icon"
+                        :class="{ 'bg-surface-subtle text-primary': showSearch }"
                         title="Search in thread (Ctrl+F)">
                     🔍
                 </button>
                 <button @click="showAnalysis = !showAnalysis"
-                        class="p-2 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md touch-manipulation lg:hidden"
-                        :class="{ 'bg-gray-800 text-primary': showAnalysis }"
+                        class="btn-icon lg:hidden"
+                        :class="{ 'bg-surface-subtle text-primary': showAnalysis }"
                         title="Toggle AI Analysis">
                     🤖
                 </button>
                 <button hx-post="/api/email/toggle-star/{{ folder }}/{{ uid }}"
                         hx-swap="none"
                         hx-on::after-request="this.textContent = event.detail.xhr.response.includes('true') ? '★' : '☆'"
-                        class="p-2 sm:p-2 text-lg {% if is_starred %}text-yellow-400{% else %}text-gray-600 hover:text-gray-400{% endif %} hover:bg-gray-800 rounded-md touch-manipulation"
+                        class="btn-icon text-lg {% if is_starred %}text-yellow-400{% else %}text-muted hover:text-body{% endif %}"
                         title="Toggle star">
                     {% if is_starred %}★{% else %}☆{% endif %}
                 </button>
                 <button hx-post="/api/email/toggle-read/{{ folder }}/{{ uid }}" 
                         hx-swap="none"
-                        class="p-2 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md touch-manipulation" 
+                        class="btn-icon" 
                         title="Toggle read/unread">
                     ✉️
                 </button>
                 <div class="relative">
                     <button @click="showActions = !showActions" 
-                            class="p-2 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md touch-manipulation"
+                            class="btn-icon"
                             title="More actions">
                         ⋯
                     </button>
                     <div x-show="showActions" @click.outside="showActions = false" x-cloak
-                         class="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-md shadow-lg z-10">
+                         class="absolute right-0 mt-2 w-48 bg-surface border border-border rounded-md shadow-lg z-10 py-1">
                         <button hx-post="/api/email/move/{{ folder }}/{{ uid }}?destination=[Gmail]/All Mail"
                                 hx-swap="none"
                                 hx-on::after-request="window.showToast('Email archived', 'success'); setTimeout(() => window.location.href='/inbox', 1000);"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             📥 Archive
                         </button>
                         <button hx-post="/api/email/move/{{ folder }}/{{ uid }}?destination=[Gmail]/Trash"
                                 hx-swap="none"
                                 hx-on::after-request="window.showToast('Email deleted', 'success'); setTimeout(() => window.location.href='/inbox', 1000);"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             🗑️ Delete
                         </button>
                         <button hx-post="/api/email/spam/{{ folder }}/{{ uid }}"
                                 hx-swap="none"
                                 hx-on::after-request="window.showToast('Marked as spam', 'success'); setTimeout(() => window.location.href='/inbox', 1000);"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             ⚠️ Mark as Spam
                         </button>
                         <button hx-post="/api/email/mute/{{ folder }}/{{ uid }}"
                                 hx-swap="none"
                                 hx-on::after-request="window.showToast('Thread muted', 'success'); showActions = false;"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             🔇 Mute Thread
                         </button>
                         <button @click="showActions = false; $refs.snoozeInput.showPicker()"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             ⏰ Snooze
                         </button>
                         <input type="datetime-local" x-ref="snoozeInput" class="hidden"
@@ -186,7 +187,7 @@
                                        });
                                ">
                         <button @click="showActions = false; $refs.reminderInput.showPicker()"
-                                class="w-full px-4 py-3 text-left text-sm text-gray-300 hover:bg-gray-800 touch-manipulation">
+                                class="w-full px-4 py-2 text-left text-sm text-body hover:bg-surface-hover transition-colors">
                             🔔 Remind Me
                         </button>
                         <input type="datetime-local" x-ref="reminderInput" class="hidden"
@@ -204,33 +205,33 @@
         </div>
 
         <div x-show="showSearch" x-cloak x-collapse 
-             class="bg-gray-900 border border-gray-700 rounded-lg p-3 flex items-center gap-2">
+             class="card p-3 flex items-center gap-2">
             <input type="text" 
                    x-ref="searchInput"
                    x-model="searchQuery"
                    @keydown.enter.prevent="searchInThread()"
                    @keydown.escape="showSearch = false; clearHighlights()"
                    placeholder="Search in thread..."
-                   class="flex-1 px-3 py-2 text-sm bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:ring-2 focus:ring-primary focus:border-transparent">
+                   class="flex-1 input-field py-2">
             <button @click="searchInThread()"
-                    class="px-3 py-2 text-sm bg-primary text-white rounded hover:bg-primary/90">
+                    class="btn-primary py-2 text-sm">
                 Find
             </button>
-            <div x-show="totalMatches > 0" class="flex items-center gap-2 text-sm text-gray-400">
+            <div x-show="totalMatches > 0" class="flex items-center gap-2 text-sm text-muted">
                 <span x-text="`${currentMatch}/${totalMatches}`"></span>
                 <button @click="prevMatch()" 
-                        class="p-1 hover:text-white"
+                        class="p-1 hover:text-body"
                         title="Previous match">
                     ↑
                 </button>
                 <button @click="nextMatch()" 
-                        class="p-1 hover:text-white"
+                        class="p-1 hover:text-body"
                         title="Next match">
                     ↓
                 </button>
             </div>
             <button @click="showSearch = false; clearHighlights()"
-                    class="p-1 text-gray-400 hover:text-white"
+                    class="p-1 text-muted hover:text-body"
                     title="Close search">
                 ✕
             </button>
@@ -238,9 +239,9 @@
 
         <div class="space-y-3 sm:space-y-4 email-content-container">
             {% for message in messages %}
-            <div class="bg-gray-900 rounded-lg overflow-hidden" 
+            <div class="card p-0 overflow-hidden" 
                  x-data="{ expanded: {{ 'true' if loop.last else 'false' }} }">
-                <div class="px-3 py-3 sm:px-4 border-b border-gray-800 cursor-pointer hover:bg-gray-800 touch-manipulation"
+                <div class="px-3 py-3 sm:px-4 border-b border-border cursor-pointer hover:bg-surface-hover transition-colors"
                      @click="expanded = !expanded">
                     <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center space-x-2 sm:space-x-3 min-w-0">
@@ -248,10 +249,10 @@
                                 {{ message.from_name[0] if message.from_name else '?' }}
                             </div>
                             <div class="min-w-0">
-                                <p class="text-sm font-medium text-white truncate">
+                                <p class="text-sm font-medium text-body truncate">
                                     {{ message.from_name or message.from_addr }}
                                 </p>
-                                <p class="text-xs text-gray-500 truncate hidden sm:block">
+                                <p class="text-xs text-muted truncate hidden sm:block">
                                     to {{ message.to_addr[:50] }}{% if message.to_addr|length > 50 %}...{% endif %}
                                     {% if message.cc_addr %}
                                     <span class="ml-1">cc: {{ message.cc_addr[:30] }}{% if message.cc_addr|length > 30 %}...{% endif %}</span>
@@ -261,16 +262,16 @@
                         </div>
                         <div class="flex items-center space-x-2 flex-shrink-0">
                             {% if message.has_attachments %}
-                            <span class="text-gray-500 hidden sm:inline" title="Has attachments">📎</span>
+                            <span class="text-muted hidden sm:inline" title="Has attachments">📎</span>
                             {% endif %}
-                            <span class="text-xs sm:text-sm text-gray-500">{{ message.date }}</span>
-                            <span class="text-gray-500 text-sm" x-text="expanded ? '▼' : '▶'"></span>
+                            <span class="text-xs sm:text-sm text-muted">{{ message.date }}</span>
+                            <span class="text-muted text-sm" x-text="expanded ? '▼' : '▶'"></span>
                         </div>
                     </div>
                 </div>
                 
                 <div x-show="expanded" x-collapse x-cloak>
-                    <div class="px-3 py-3 sm:px-4 sm:py-4 email-content prose prose-invert max-w-none text-sm text-gray-300 overflow-x-auto"
+                    <div class="px-3 py-3 sm:px-4 sm:py-4 email-content prose prose-invert max-w-none text-sm text-body overflow-x-auto"
                          x-data="{ showQuoted: false }">
                         <div>
                             {{ message.content | safe }}
@@ -279,11 +280,11 @@
                         {% if message.quoted_content %}
                         <div class="mt-4">
                             <button @click="showQuoted = !showQuoted" 
-                                    class="text-gray-500 hover:text-gray-300 transition-colors p-1 bg-gray-800 rounded text-xs focus:outline-none"
+                                    class="text-muted hover:text-body transition-colors p-1 bg-surface-subtle rounded text-xs focus:outline-none"
                                     title="Show quoted text">
                                 <span x-text="showQuoted ? '⋯' : '⋯'"></span>
                             </button>
-                            <div x-show="showQuoted" x-collapse x-cloak class="mt-2 border-l-2 border-gray-700 pl-4 text-gray-400">
+                            <div x-show="showQuoted" x-collapse x-cloak class="mt-2 border-l-2 border-border pl-4 text-muted">
                                 {{ message.quoted_content | safe }}
                             </div>
                         </div>
@@ -291,13 +292,13 @@
                     </div>
                     
                     {% if message.has_attachments and message.attachment_filenames %}
-                    <div class="px-3 py-2 sm:px-4 sm:py-3 bg-gray-800/50 border-t border-gray-800" x-data="{ previewIndex: null }">
+                    <div class="px-3 py-2 sm:px-4 sm:py-3 bg-surface-subtle border-t border-border" x-data="{ previewIndex: null }">
                         <div class="flex items-center justify-between mb-2">
-                            <p class="text-xs font-medium text-gray-500">Attachments</p>
+                            <p class="text-xs font-medium text-muted">Attachments</p>
                             {% if message.attachment_filenames|length > 1 %}
                             <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/download-all"
                                download="attachments_{{ message.uid }}.zip"
-                               class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                               class="text-xs text-primary hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1">
                                 📦 Download All ({{ message.attachment_filenames|length }})
                             </a>
                             {% endif %}
@@ -307,16 +308,16 @@
                             {% set is_image = filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')) %}
                             {% set is_pdf = filename.lower().endswith('.pdf') %}
                             {% set is_suspicious = filename.lower().endswith(('.exe', '.bat', '.cmd', '.com', '.scr', '.vbs', '.js', '.jar', '.dll', '.msi', '.app', '.dmg', '.sh', '.ps1', '.zip', '.rar')) %}
-                            <div class="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium {{ 'bg-red-900/50 border border-red-700 text-red-300' if is_suspicious else 'bg-gray-800 text-gray-300' }}">
+                            <div class="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium {{ 'bg-red-900/50 border border-red-700 text-red-300' if is_suspicious else 'bg-surface border border-border text-body' }}">
                                 {% if is_suspicious %}
                                 <span class="text-red-400" title="Warning: Potentially dangerous file type">⚠️</span>
                                 {% endif %}
                                 {% if is_image %}
-                                <button @click="previewIndex = {{ loop.index0 }}" class="hover:text-primary">
+                                <button @click="previewIndex = {{ loop.index0 }}" class="hover:text-primary transition-colors">
                                     🖼️ {{ filename[:20] }}{% if filename|length > 20 %}...{% endif %}
                                 </button>
                                 {% elif is_pdf %}
-                                <button @click="previewIndex = {{ loop.index0 }}" class="hover:text-primary">
+                                <button @click="previewIndex = {{ loop.index0 }}" class="hover:text-primary transition-colors">
                                     📄 {{ filename[:20] }}{% if filename|length > 20 %}...{% endif %}
                                 </button>
                                 {% else %}
@@ -324,7 +325,7 @@
                                 {% endif %}
                                 <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/{{ filename }}" 
                                    download="{{ filename }}"
-                                   class="{{ 'text-red-400 hover:text-red-300' if is_suspicious else 'text-primary hover:text-primary/80' }}"
+                                   class="{{ 'text-red-400 hover:text-red-300' if is_suspicious else 'text-primary hover:text-blue-600 dark:hover:text-blue-400' }}"
                                    title="{{ 'WARNING: Download with caution' if is_suspicious else 'Download' }}">⬇</a>
                             </div>
                             {% endfor %}
@@ -337,16 +338,16 @@
                              x-cloak
                              @click.self="previewIndex = null"
                              class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-                            <div class="relative w-full max-w-6xl max-h-full bg-gray-900 rounded-lg overflow-hidden">
-                                <div class="flex items-center justify-between p-4 border-b border-gray-800">
-                                    <h3 class="text-sm font-medium text-gray-100 truncate">{{ filename }}</h3>
+                            <div class="relative w-full max-w-6xl max-h-full bg-surface rounded-lg overflow-hidden">
+                                <div class="flex items-center justify-between p-4 border-b border-border">
+                                    <h3 class="text-sm font-medium text-body truncate">{{ filename }}</h3>
                                     <div class="flex items-center gap-2">
                                         <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/{{ filename }}" 
                                            download="{{ filename }}"
-                                           class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-primary/90">
+                                           class="btn-primary py-1 text-xs">
                                             Download
                                         </a>
-                                        <button @click="previewIndex = null" class="text-gray-400 hover:text-gray-200">
+                                        <button @click="previewIndex = null" class="text-muted hover:text-body">
                                             <span class="text-2xl">×</span>
                                         </button>
                                     </div>
@@ -375,7 +376,7 @@
         {% if not load_images %}
         <div class="flex justify-center">
             <a href="/thread/{{ folder }}/{{ uid }}?load_images=true&unread_only={{ 'true' if unread_only else 'false' }}"
-               class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation">
+               class="btn-secondary">
                 🖼️ Load Remote Images
             </a>
         </div>
@@ -408,20 +409,20 @@
             </div>
             {% endif %}
             <div class="flex gap-2 sm:gap-3">
-                <button class="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 touch-manipulation"
+                <button class="flex-1 sm:flex-none btn-primary"
                         hx-get="/compose?reply_to={{ uid }}&folder={{ folder }}"
                         hx-target="#modal-container"
                         hx-swap="innerHTML">
                     ↩️ Reply
                 </button>
-                <button class="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation"
+                <button class="flex-1 sm:flex-none btn-secondary"
                         hx-get="/compose?reply_all={{ uid }}&folder={{ folder }}"
                         hx-target="#modal-container"
                         hx-swap="innerHTML">
                     <span class="hidden sm:inline">↩️↩️ Reply All</span>
                     <span class="sm:hidden">↩️↩️ All</span>
                 </button>
-                <button class="flex-1 sm:flex-none px-4 py-2.5 sm:py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation"
+                <button class="flex-1 sm:flex-none btn-secondary"
                         hx-get="/compose?forward={{ uid }}&folder={{ folder }}"
                         hx-target="#modal-container"
                         hx-swap="innerHTML">
@@ -436,28 +437,28 @@
          hx-trigger="load"
          hx-swap="innerHTML">
         <div class="animate-pulse space-y-4">
-            <div class="bg-gray-900 rounded-lg p-4 h-24"></div>
-            <div class="bg-gray-900 rounded-lg p-4 h-32"></div>
-            <div class="bg-gray-900 rounded-lg p-4 h-40"></div>
+            <div class="bg-surface rounded-lg p-4 h-24"></div>
+            <div class="bg-surface rounded-lg p-4 h-32"></div>
+            <div class="bg-surface rounded-lg p-4 h-40"></div>
         </div>
     </div>
     
     <div x-show="showAnalysis" x-cloak 
          class="lg:hidden fixed inset-0 z-40 bg-black/50"
          @click="showAnalysis = false">
-        <div class="absolute right-0 top-0 bottom-0 w-80 max-w-full bg-gray-950 overflow-y-auto"
+        <div class="absolute right-0 top-0 bottom-0 w-80 max-w-full bg-surface overflow-y-auto"
              @click.stop
              hx-get="/analysis/{{ folder }}/{{ uid }}"
              hx-trigger="intersect once"
              hx-swap="innerHTML">
-            <div class="p-4 border-b border-gray-800 flex items-center justify-between sticky top-0 bg-gray-950">
-                <h3 class="font-medium text-white">AI Analysis</h3>
-                <button @click="showAnalysis = false" class="p-2 text-gray-400 hover:text-white">✕</button>
+            <div class="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-surface">
+                <h3 class="font-medium text-body">AI Analysis</h3>
+                <button @click="showAnalysis = false" class="p-2 text-muted hover:text-body">✕</button>
             </div>
             <div class="p-4 animate-pulse space-y-4">
-                <div class="bg-gray-900 rounded-lg p-4 h-24"></div>
-                <div class="bg-gray-900 rounded-lg p-4 h-32"></div>
-                <div class="bg-gray-900 rounded-lg p-4 h-40"></div>
+                <div class="bg-surface-subtle rounded-lg p-4 h-24"></div>
+                <div class="bg-surface-subtle rounded-lg p-4 h-32"></div>
+                <div class="bg-surface-subtle rounded-lg p-4 h-40"></div>
             </div>
         </div>
     </div>

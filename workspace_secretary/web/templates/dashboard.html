@@ -15,38 +15,36 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-6">
-            <div class="bg-gray-900 rounded-lg p-4">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-semibold text-white">🔥 Priority Emails</h2>
-                    <a href="/inbox" class="text-sm text-primary hover:text-primary/80">View all →</a>
+                    <h2 class="h2">🔥 Priority Emails</h2>
+                    <a href="/inbox" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">View all →</a>
                 </div>
                 {% if priority_emails %}
                 <div class="space-y-2">
                     {% for email in priority_emails %}
                     <a href="/thread/{{ email.folder }}/{{ email.uid }}" 
-                       class="block p-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                       class="block p-3 bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent hover:border-border">
                         <div class="flex items-start justify-between">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center space-x-2 mb-1">
-                                    <span class="px-2 py-0.5 text-xs font-medium rounded
-                                        {% if email.priority == 'high' %}bg-red-600 text-white
-                                        {% else %}bg-yellow-600 text-white{% endif %}">
+                                    <span class="badge {% if email.priority == 'high' %}badge-error{% else %}badge-warning{% endif %}">
                                         {{ email.priority|upper }}
                                     </span>
                                     {% if email.signals.is_from_vip %}
-                                    <span class="text-yellow-400 text-xs">⭐ VIP</span>
+                                    <span class="text-warning text-xs font-medium">⭐ VIP</span>
                                     {% endif %}
                                     {% if email.signals.has_question %}
-                                    <span class="text-green-400 text-xs">❓ Question</span>
+                                    <span class="text-success text-xs font-medium">❓ Question</span>
                                     {% endif %}
                                     {% if email.signals.mentions_deadline %}
-                                    <span class="text-red-400 text-xs">⏰ Deadline</span>
+                                    <span class="text-error text-xs font-medium">⏰ Deadline</span>
                                     {% endif %}
                                 </div>
-                                <p class="text-sm font-medium text-white truncate">{{ email.subject or '(no subject)' }}</p>
-                                <p class="text-xs text-gray-400 truncate">{{ email.from_addr }}</p>
+                                <p class="text-sm font-medium text-body truncate">{{ email.subject or '(no subject)' }}</p>
+                                <p class="text-xs text-muted truncate">{{ email.from_addr }}</p>
                             </div>
-                            <span class="text-xs text-gray-500 ml-2 flex-shrink-0">
+                            <span class="text-xs text-muted ml-2 flex-shrink-0">
                                 {{ email.date.strftime('%I:%M %p') if email.date else '' }}
                             </span>
                         </div>
@@ -54,22 +52,21 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-center py-8">
-                    <p class="text-gray-500">✨ No priority emails right now</p>
-                    <p class="text-xs text-gray-600 mt-1">You're all caught up!</p>
-                </div>
+                    {% with icon="✨", title="No priority emails", description="You're all caught up!" %}
+                        {% include "partials/empty_state.html" %}
+                    {% endwith %}
                 {% endif %}
             </div>
 
-            <div class="bg-gray-900 rounded-lg p-4">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-semibold text-white">📥 Recent Unread</h2>
-                    <a href="/inbox?unread=true" class="text-sm text-primary hover:text-primary/80">View all →</a>
+                    <h2 class="h2">📥 Recent Unread</h2>
+                    <a href="/inbox?unread=true" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">View all →</a>
                 </div>
                 <div hx-get="/inbox/partial?limit=5&unread_only=true" hx-trigger="load" hx-swap="innerHTML">
                     <div class="animate-pulse space-y-2">
                         {% for _ in range(3) %}
-                        <div class="h-16 bg-gray-800 rounded"></div>
+                        <div class="h-16 bg-surface-subtle rounded"></div>
                         {% endfor %}
                     </div>
                 </div>
@@ -77,83 +74,82 @@
         </div>
 
         <div class="space-y-6">
-            <div class="bg-gray-900 rounded-lg p-4">
+            <div class="card">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-semibold text-white">📅 Today's Schedule</h2>
-                    <a href="/calendar" class="text-sm text-primary hover:text-primary/80">Full calendar →</a>
+                    <h2 class="h2">📅 Today's Schedule</h2>
+                    <a href="/calendar" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">Full calendar →</a>
                 </div>
                 {% if upcoming_events %}
                 <div class="space-y-3">
                     {% for event in upcoming_events %}
-                    <div class="p-3 bg-gray-800 rounded-lg">
+                    <div class="p-3 bg-surface-subtle rounded-lg border border-border">
                         <div class="flex items-start justify-between">
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-white truncate">{{ event.summary }}</p>
+                                <p class="text-sm font-medium text-body truncate">{{ event.summary }}</p>
                                 {% if event.start.dateTime %}
-                                <p class="text-xs text-gray-400">
+                                <p class="text-xs text-muted">
                                     {{ event.start.dateTime[11:16] }} - {{ event.end.dateTime[11:16] if event.end else '' }}
                                 </p>
                                 {% endif %}
                             </div>
                             {% if event.hangoutLink %}
                             <a href="{{ event.hangoutLink }}" target="_blank"
-                               class="ml-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                               class="ml-2 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
                                 Join
                             </a>
                             {% endif %}
                         </div>
                         {% if event.location %}
-                        <p class="text-xs text-gray-500 mt-1 truncate">📍 {{ event.location }}</p>
+                        <p class="text-xs text-muted mt-1 truncate">📍 {{ event.location }}</p>
                         {% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-center py-6">
-                    <p class="text-gray-500">No more meetings today</p>
-                    <p class="text-xs text-gray-600 mt-1">Enjoy your free time!</p>
-                </div>
+                    {% with icon="☕", title="No more meetings", description="Enjoy your free time!" %}
+                        {% include "partials/empty_state.html" %}
+                    {% endwith %}
                 {% endif %}
             </div>
 
-            <div class="bg-gray-900 rounded-lg p-4">
-                <h2 class="text-lg font-semibold text-white mb-4">⚡ Quick Actions</h2>
+            <div class="card">
+                <h2 class="h2 mb-3">⚡ Quick Actions</h2>
                 <div class="space-y-2">
                     <button hx-get="/compose" 
                             hx-target="body" 
                             hx-swap="beforeend"
-                            class="w-full flex items-center px-3 py-2 text-sm text-left text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                            class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600">
                         <span class="mr-2">✏️</span> Compose Email
                     </button>
                     <a href="/calendar" 
-                       class="w-full flex items-center px-3 py-2 text-sm text-left text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                       class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600 no-underline">
                         <span class="mr-2">📅</span> View Calendar
                     </a>
                     <a href="/search" 
-                       class="w-full flex items-center px-3 py-2 text-sm text-left text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">
+                       class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600 no-underline">
                         <span class="mr-2">🔍</span> Search Emails
                     </a>
                 </div>
             </div>
 
-            <div class="bg-gray-900 rounded-lg p-4">
-                <h2 class="text-lg font-semibold text-white mb-3">⌨️ Keyboard Shortcuts</h2>
+            <div class="card">
+                <h2 class="h2 mb-3">⌨️ Keyboard Shortcuts</h2>
                 <div class="space-y-2 text-xs">
-                    <div class="flex justify-between text-gray-400">
+                    <div class="flex justify-between text-muted">
                         <span>Compose</span>
-                        <kbd class="px-2 py-1 bg-gray-800 rounded">C</kbd>
+                        <kbd class="px-2 py-1 bg-surface-subtle border border-border rounded text-body font-mono">C</kbd>
                     </div>
-                    <div class="flex justify-between text-gray-400">
+                    <div class="flex justify-between text-muted">
                         <span>Search</span>
-                        <kbd class="px-2 py-1 bg-gray-800 rounded">/</kbd>
+                        <kbd class="px-2 py-1 bg-surface-subtle border border-border rounded text-body font-mono">/</kbd>
                     </div>
-                    <div class="flex justify-between text-gray-400">
+                    <div class="flex justify-between text-muted">
                         <span>Go to Inbox</span>
-                        <kbd class="px-2 py-1 bg-gray-800 rounded">G I</kbd>
+                        <kbd class="px-2 py-1 bg-surface-subtle border border-border rounded text-body font-mono">G I</kbd>
                     </div>
-                    <div class="flex justify-between text-gray-400">
+                    <div class="flex justify-between text-muted">
                         <span>Go to Calendar</span>
-                        <kbd class="px-2 py-1 bg-gray-800 rounded">G C</kbd>
+                        <kbd class="px-2 py-1 bg-surface-subtle border border-border rounded text-body font-mono">G C</kbd>
                     </div>
                 </div>
             </div>

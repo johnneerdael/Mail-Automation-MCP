@@ -4,7 +4,6 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-    <!-- Header with overall health -->
     <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
             <h1 class="text-2xl font-bold">System Health</h1>
@@ -17,10 +16,9 @@
                 {% else %}✕ Critical{% endif %}
             </span>
         </div>
-        <a href="/inbox" class="text-gray-400 hover:text-white text-sm">← Back to Inbox</a>
+        <a href="/inbox" class="text-muted hover:text-default text-sm">← Back to Inbox</a>
     </div>
 
-    <!-- Alerts Banner -->
     {% if alerts %}
     <div class="mb-6 space-y-2">
         {% for alert in alerts %}
@@ -32,17 +30,15 @@
                 <p class="font-medium {% if alert.level == 'critical' %}text-red-400{% else %}text-yellow-400{% endif %}">
                     {{ alert.message }}
                 </p>
-                <p class="text-sm text-gray-400 mt-1">{{ alert.action }}</p>
+                <p class="text-sm text-muted mt-1">{{ alert.action }}</p>
             </div>
         </div>
         {% endfor %}
     </div>
     {% endif %}
 
-    <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <!-- Mutation Journal Card -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="card p-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold">Mutation Journal</h2>
                 <span class="w-3 h-3 rounded-full 
@@ -52,32 +48,31 @@
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
-                    <p class="text-2xl font-bold {% if mutation_stats.pending > 0 %}text-yellow-400{% else %}text-gray-300{% endif %}">
+                    <p class="text-2xl font-bold {% if mutation_stats.pending > 0 %}text-yellow-400{% else %}text-muted-foreground{% endif %}">
                         {{ mutation_stats.pending }}
                     </p>
-                    <p class="text-sm text-gray-500">Pending</p>
+                    <p class="text-sm text-muted">Pending</p>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold {% if mutation_stats.stuck > 0 %}text-red-400{% else %}text-gray-300{% endif %}">
+                    <p class="text-2xl font-bold {% if mutation_stats.stuck > 0 %}text-red-400{% else %}text-muted-foreground{% endif %}">
                         {{ mutation_stats.stuck }}
                     </p>
-                    <p class="text-sm text-gray-500">Stuck (>1h)</p>
+                    <p class="text-sm text-muted">Stuck (>1h)</p>
                 </div>
                 <div>
-                    <p class="text-2xl font-bold {% if mutation_stats.failed_24h > 0 %}text-red-400{% else %}text-gray-300{% endif %}">
+                    <p class="text-2xl font-bold {% if mutation_stats.failed_24h > 0 %}text-red-400{% else %}text-muted-foreground{% endif %}">
                         {{ mutation_stats.failed_24h }}
                     </p>
-                    <p class="text-sm text-gray-500">Failed (24h)</p>
+                    <p class="text-sm text-muted">Failed (24h)</p>
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-green-400">{{ mutation_stats.completed_24h }}</p>
-                    <p class="text-sm text-gray-500">Completed (24h)</p>
+                    <p class="text-sm text-muted">Completed (24h)</p>
                 </div>
             </div>
         </div>
 
-        <!-- Sync Engine Card -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="card p-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold">Sync Engine</h2>
                 <span class="w-3 h-3 rounded-full 
@@ -87,7 +82,7 @@
             </div>
             <div class="space-y-3">
                 <div>
-                    <p class="text-sm text-gray-500">Last Sync</p>
+                    <p class="text-sm text-muted">Last Sync</p>
                     <p class="text-lg font-medium">
                         {% if sync_stats.sync_age_minutes is not none %}
                             {% if sync_stats.sync_age_minutes < 1 %}Just now
@@ -96,16 +91,16 @@
                         {% else %}Never{% endif %}
                     </p>
                     {% if sync_stats.last_sync_folder %}
-                    <p class="text-xs text-gray-500">{{ sync_stats.last_sync_folder }}</p>
+                    <p class="text-xs text-muted">{{ sync_stats.last_sync_folder }}</p>
                     {% endif %}
                 </div>
                 <div class="flex justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Folders</p>
+                        <p class="text-sm text-muted">Folders</p>
                         <p class="text-lg font-medium">{{ sync_stats.folder_count }}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Errors</p>
+                        <p class="text-sm text-muted">Errors</p>
                         <p class="text-lg font-medium {% if sync_stats.unresolved_errors > 0 %}text-red-400{% endif %}">
                             {{ sync_stats.unresolved_errors }}
                         </p>
@@ -114,24 +109,23 @@
             </div>
         </div>
 
-        <!-- Database Card -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="card p-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-lg font-semibold">Database</h2>
                 <span class="w-3 h-3 rounded-full bg-green-500"></span>
             </div>
             <div class="space-y-3">
                 <div>
-                    <p class="text-sm text-gray-500">Total Emails</p>
+                    <p class="text-sm text-muted">Total Emails</p>
                     <p class="text-2xl font-bold">{{ "{:,}".format(db_stats.total_emails) }}</p>
                 </div>
                 <div class="flex justify-between">
                     <div>
-                        <p class="text-sm text-gray-500">Folders</p>
+                        <p class="text-sm text-muted">Folders</p>
                         <p class="text-lg font-medium">{{ db_stats.folder_count }}</p>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Unread</p>
+                        <p class="text-sm text-muted">Unread</p>
                         <p class="text-lg font-medium text-blue-400">{{ "{:,}".format(db_stats.unread_count) }}</p>
                     </div>
                 </div>
@@ -139,14 +133,12 @@
         </div>
     </div>
 
-    <!-- Detail Tables -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Recent Mutation Issues -->
-        <div class="bg-gray-900 rounded-lg border border-gray-800">
-            <div class="px-6 py-4 border-b border-gray-800">
+        <div class="card">
+            <div class="px-6 py-4 border-b border-border">
                 <h2 class="text-lg font-semibold">Recent Mutation Issues</h2>
             </div>
-            <div class="divide-y divide-gray-800">
+            <div class="divide-y divide-border">
                 {% if mutation_stats.recent_issues %}
                     {% for issue in mutation_stats.recent_issues %}
                     <div class="px-6 py-3">
@@ -159,7 +151,7 @@
                                 </span>
                                 <span class="text-sm font-medium">{{ issue.action }}</span>
                             </div>
-                            <span class="text-xs text-gray-500">{{ issue.email_folder }}/{{ issue.email_uid }}</span>
+                            <span class="text-xs text-muted">{{ issue.email_folder }}/{{ issue.email_uid }}</span>
                         </div>
                         {% if issue.error %}
                         <p class="text-xs text-red-400 mt-1 truncate">{{ issue.error }}</p>
@@ -167,31 +159,30 @@
                     </div>
                     {% endfor %}
                 {% else %}
-                    <div class="px-6 py-8 text-center text-gray-500">
+                    <div class="px-6 py-8 text-center text-muted">
                         No issues found ✓
                     </div>
                 {% endif %}
             </div>
         </div>
 
-        <!-- Recent Sync Errors -->
-        <div class="bg-gray-900 rounded-lg border border-gray-800">
-            <div class="px-6 py-4 border-b border-gray-800">
+        <div class="card">
+            <div class="px-6 py-4 border-b border-border">
                 <h2 class="text-lg font-semibold">Recent Sync Errors</h2>
             </div>
-            <div class="divide-y divide-gray-800">
+            <div class="divide-y divide-border">
                 {% if sync_stats.recent_errors %}
                     {% for error in sync_stats.recent_errors %}
                     <div class="px-6 py-3">
                         <div class="flex items-center justify-between">
                             <span class="text-sm font-medium text-red-400">{{ error.error_type }}</span>
-                            <span class="text-xs text-gray-500">{{ error.folder }}</span>
+                            <span class="text-xs text-muted">{{ error.folder }}</span>
                         </div>
-                        <p class="text-xs text-gray-400 mt-1 truncate">{{ error.error_message }}</p>
+                        <p class="text-xs text-muted mt-1 truncate">{{ error.error_message }}</p>
                     </div>
                     {% endfor %}
                 {% else %}
-                    <div class="px-6 py-8 text-center text-gray-500">
+                    <div class="px-6 py-8 text-center text-muted">
                         No sync errors ✓
                     </div>
                 {% endif %}
@@ -199,9 +190,8 @@
         </div>
     </div>
 
-    <!-- Folder Breakdown -->
-    <div class="mt-6 bg-gray-900 rounded-lg border border-gray-800">
-        <div class="px-6 py-4 border-b border-gray-800">
+    <div class="mt-6 card">
+        <div class="px-6 py-4 border-b border-border">
             <h2 class="text-lg font-semibold">Folder Distribution</h2>
         </div>
         <div class="p-6">
@@ -209,16 +199,15 @@
                 {% for folder in db_stats.folder_breakdown %}
                 <div class="text-center">
                     <p class="text-xl font-bold">{{ "{:,}".format(folder.count) }}</p>
-                    <p class="text-xs text-gray-500 truncate" title="{{ folder.folder }}">{{ folder.folder }}</p>
+                    <p class="text-xs text-muted truncate" title="{{ folder.folder }}">{{ folder.folder }}</p>
                 </div>
                 {% endfor %}
             </div>
         </div>
     </div>
 
-    <!-- Integrity Check -->
-    <div class="mt-6 bg-gray-900 rounded-lg border border-gray-800">
-        <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+    <div class="mt-6 card">
+        <div class="px-6 py-4 border-b border-border flex items-center justify-between">
             <h2 class="text-lg font-semibold">DB vs IMAP Integrity</h2>
             <span class="w-3 h-3 rounded-full 
                 {% if integrity_stats.health == 'healthy' %}bg-green-500
@@ -236,20 +225,20 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
                     <thead>
-                        <tr class="text-left text-gray-500 border-b border-gray-800">
+                        <tr class="text-left text-muted border-b border-border">
                             <th class="pb-2">Folder</th>
                             <th class="pb-2 text-right">DB Count</th>
                             <th class="pb-2 text-right">UIDNEXT</th>
                             <th class="pb-2 text-right">Last Sync</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-800">
+                    <tbody class="divide-y divide-border">
                         {% for folder in integrity_stats.folder_integrity %}
                         <tr>
                             <td class="py-2 truncate max-w-xs" title="{{ folder.folder }}">{{ folder.folder }}</td>
                             <td class="py-2 text-right">{{ "{:,}".format(folder.db_count) }}</td>
-                            <td class="py-2 text-right text-gray-500">{{ folder.uidnext or '-' }}</td>
-                            <td class="py-2 text-right text-gray-500 text-xs">
+                            <td class="py-2 text-right text-muted">{{ folder.uidnext or '-' }}</td>
+                            <td class="py-2 text-right text-muted text-xs">
                                 {% if folder.last_sync %}
                                     {{ folder.last_sync.strftime('%Y-%m-%d %H:%M') if folder.last_sync is not string else folder.last_sync[:16] }}
                                 {% else %}
