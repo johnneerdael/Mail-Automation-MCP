@@ -19,6 +19,9 @@ def get_engine_url() -> str:
     return os.environ.get("ENGINE_API_URL", "http://localhost:8000")
 
 
+ENGINE_URL = get_engine_url()
+
+
 async def get_client() -> httpx.AsyncClient:
     global _client
     if _client is None:

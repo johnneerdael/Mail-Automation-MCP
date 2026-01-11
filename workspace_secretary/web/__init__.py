@@ -24,6 +24,10 @@ from workspace_secretary.config import WebConfig
 
 logger = logging.getLogger(__name__)
 
+# Initialize Jinja2 templates
+_templates_dir = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
+
 _web_config: Optional[WebConfig] = None
 
 HEALTH_CHECK_INTERVAL_SECONDS = 300

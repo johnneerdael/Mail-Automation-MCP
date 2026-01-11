@@ -13,8 +13,10 @@ from queue import Queue, Empty
 from typing import Any, Optional, TYPE_CHECKING, cast
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import io
 
 from workspace_secretary.config import load_config, ServerConfig, ImapConfig
 from workspace_secretary.engine.imap_sync import ImapClient
@@ -1490,6 +1492,61 @@ async def setup_labels(req: SetupLabelsRequest):
     except Exception as e:
         logger.error(f"Setup labels error: {e}")
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/email/{folder}/{uid}/attachment/{filename}")
+async def download_attachment(folder: str, uid: int, filename: str):
+    """Download an email attachment."""
+    if not state.enrolled:
+        raise HTTPException(status_code=401, detail="No account configured")
+
+    if not state.imap_client:
+        raise HTTPException(status_code=500, detail="IMAP client not connected")
+
+    try:
+        email = state.imap_client.fetch_email(uid, folder)
+        if not email:
+            raise HTTPException(status_code=404, detail="Email not found")
+
+        if not email.attachments:
+            raise HTTPException(status_code=404, detail="No attachments found")
+
+        attachment = next(
+            (att for att in email.attachments if att.filename == filename), None
+        )
+        if not attachment:
+            raise HTTPException(
+                status_code=404, detail=f"Attachment '{filename}' not found"
+            )
+
+        if not attachment.content:
+            raise HTTPException(status_code=500, detail="Attachment content is empty")
+
+        return StreamingResponse(
+            io.BytesIO(attachment.content),
+            media_type=attachment.content_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{attachment.filename}"'
+            },
+        )
+        if not attachment:
+            raise HTTPException(
+                status_code=404, detail=f"Attachment '{filename}' not found"
+            )
+
+        return StreamingResponse(
+            io.BytesIO(attachment.content),
+            media_type=attachment.content_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'attachment; filename="{attachment.filename}"'
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Download attachment error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================

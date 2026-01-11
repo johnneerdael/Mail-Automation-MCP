@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 from datetime import datetime
 import html
 import re
+import httpx
 
 from workspace_secretary.web import database as db
 from workspace_secretary.web.auth import require_auth, Session
+from workspace_secretary.web.engine_client import ENGINE_URL
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -208,3 +210,29 @@ async def thread_view(
             "calendar_invite": calendar_invite,
         },
     )
+
+
+@router.get("/api/attachment/{folder}/{uid}/{filename}")
+async def download_attachment(
+    folder: str,
+    uid: int,
+    filename: str,
+    session: Session = Depends(require_auth)
+):
+    """Proxy attachment downloads from the engine API."""
+    engine_url = get_engine_url()
+    url = f"{engine_url}/api/email/{folder}/{uid}/attachment/{filename}"
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, timeout=30.0)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Attachment not found")
+        
+        return StreamingResponse(
+            iter([response.content]),
+            media_type=response.headers.get("Content-Type", "application/octet-stream"),
+            headers={
+                "Content-Disposition": response.headers.get("Content-Disposition", f'attachment; filename="{filename}"')
+            }
+        )
