@@ -14,13 +14,17 @@
              const files = Array.from(event.dataTransfer.files);
              this.attachments.push(...files);
          },
-         formatFileSize(bytes) {
-             if (bytes === 0) return '0 Bytes';
-             const k = 1024;
-             const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-             const i = Math.floor(Math.log(bytes) / Math.log(k));
-             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-         }
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            },
+            isSuspiciousFile(filename) {
+                const suspiciousExts = ['.exe', '.bat', '.cmd', '.com', '.scr', '.vbs', '.js', '.jar', '.dll', '.msi', '.app', '.dmg', '.sh', '.ps1'];
+                return suspiciousExts.some(ext => filename.toLowerCase().endsWith(ext));
+            }
      }"
      x-init="
          autoSaveTimer = setInterval(() => {
@@ -165,11 +169,15 @@
                 <div x-show="attachments.length > 0" class="mt-4 space-y-2">
                     <p class="text-xs font-medium text-gray-400">Attachments:</p>
                     <template x-for="(file, index) in attachments" :key="index">
-                        <div class="flex items-center justify-between p-2 bg-gray-800 border border-gray-700 rounded-md">
+                        <div class="flex items-center justify-between p-2 rounded-md"
+                             :class="isSuspiciousFile(file.name) ? 'bg-red-900/30 border border-red-700' : 'bg-gray-800 border border-gray-700'">
                             <div class="flex items-center gap-2 min-w-0 flex-1">
-                                <span class="text-lg">📎</span>
+                                <span x-show="isSuspiciousFile(file.name)" class="text-red-400 text-lg" title="Warning: Potentially dangerous file type">⚠️</span>
+                                <span x-show="!isSuspiciousFile(file.name)" class="text-lg">📎</span>
                                 <div class="min-w-0">
-                                    <p class="text-sm text-gray-200 truncate" x-text="file.name"></p>
+                                    <p class="text-sm truncate" 
+                                       :class="isSuspiciousFile(file.name) ? 'text-red-300' : 'text-gray-200'" 
+                                       x-text="file.name"></p>
                                     <p class="text-xs text-gray-500" x-text="formatFileSize(file.size)"></p>
                                 </div>
                             </div>

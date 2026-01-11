@@ -292,12 +292,25 @@
                     
                     {% if message.has_attachments and message.attachment_filenames %}
                     <div class="px-3 py-2 sm:px-4 sm:py-3 bg-gray-800/50 border-t border-gray-800" x-data="{ previewIndex: null }">
-                        <p class="text-xs font-medium text-gray-500 mb-2">Attachments</p>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-xs font-medium text-gray-500">Attachments</p>
+                            {% if message.attachment_filenames|length > 1 %}
+                            <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/download-all"
+                               download="attachments_{{ message.uid }}.zip"
+                               class="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                                📦 Download All ({{ message.attachment_filenames|length }})
+                            </a>
+                            {% endif %}
+                        </div>
                         <div class="flex flex-wrap gap-2">
                             {% for filename in message.attachment_filenames %}
                             {% set is_image = filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')) %}
                             {% set is_pdf = filename.lower().endswith('.pdf') %}
-                            <div class="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium bg-gray-800 text-gray-300">
+                            {% set is_suspicious = filename.lower().endswith(('.exe', '.bat', '.cmd', '.com', '.scr', '.vbs', '.js', '.jar', '.dll', '.msi', '.app', '.dmg', '.sh', '.ps1', '.zip', '.rar')) %}
+                            <div class="inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium {{ 'bg-red-900/50 border border-red-700 text-red-300' if is_suspicious else 'bg-gray-800 text-gray-300' }}">
+                                {% if is_suspicious %}
+                                <span class="text-red-400" title="Warning: Potentially dangerous file type">⚠️</span>
+                                {% endif %}
                                 {% if is_image %}
                                 <button @click="previewIndex = {{ loop.index0 }}" class="hover:text-primary">
                                     🖼️ {{ filename[:20] }}{% if filename|length > 20 %}...{% endif %}
@@ -311,8 +324,8 @@
                                 {% endif %}
                                 <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/{{ filename }}" 
                                    download="{{ filename }}"
-                                   class="text-primary hover:text-primary/80"
-                                   title="Download">⬇</a>
+                                   class="{{ 'text-red-400 hover:text-red-300' if is_suspicious else 'text-primary hover:text-primary/80' }}"
+                                   title="{{ 'WARNING: Download with caution' if is_suspicious else 'Download' }}">⬇</a>
                             </div>
                             {% endfor %}
                         </div>

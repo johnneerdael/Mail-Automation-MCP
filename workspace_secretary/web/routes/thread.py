@@ -236,3 +236,51 @@ async def download_attachment(
                 "Content-Disposition": response.headers.get("Content-Disposition", f'attachment; filename="{filename}"')
             }
         )
+
+
+@router.get("/api/attachment/{folder}/{uid}/download-all")
+async def download_all_attachments(
+    folder: str,
+    uid: int,
+    session: Session = Depends(require_auth)
+):
+    """Download all attachments as a zip file."""
+    import zipfile
+    import tempfile
+    from pathlib import Path
+    
+    engine_url = get_engine_url()
+    
+    email = db.get_email(uid, folder)
+    if not email or not email.get('attachment_filenames'):
+        raise HTTPException(status_code=404, detail="No attachments found")
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+        zip_path = Path(tmp_file.name)
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            async with httpx.AsyncClient() as client:
+                for filename in email['attachment_filenames']:
+                    url = f"{engine_url}/api/email/{folder}/{uid}/attachment/{filename}"
+                    response = await client.get(url, timeout=30.0)
+                    
+                    if response.status_code == 200:
+                        zip_file.writestr(filename, response.content)
+        
+        def iterfile():
+            with open(zip_path, 'rb') as f:
+                yield from f
+            zip_path.unlink()
+        
+        return StreamingResponse(
+            iterfile(),
+            media_type='application/zip',
+            headers={
+                'Content-Disposition': f'attachment; filename="attachments_{uid}.zip"'
+            }
+        )
+    except Exception as e:
+        if zip_path.exists():
+            zip_path.unlink()
+        raise HTTPException(status_code=500, detail=str(e))
