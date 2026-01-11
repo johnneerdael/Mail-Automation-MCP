@@ -8,7 +8,7 @@ from typing import AsyncIterator, Dict, Optional, cast
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.auth import SecretAuthSettings
-from workspace_secretary.config import ServerConfig, load_config
+from workspace_secretary.config import ServerConfig, load_config, bearer_auth
 from workspace_secretary.engine.database import DatabaseInterface, create_database
 from workspace_secretary.engine_client import EngineClient, get_engine_client
 
@@ -99,7 +99,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict]:
 def create_server(
     config_path: Optional[str] = None,
     debug: bool = False,
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = 8000,
 ) -> FastMCP:
     if debug:
@@ -112,23 +112,30 @@ def create_server(
         raise RuntimeError("Failed to load configuration")
 
     token_verifier = None
+    auth_settings = None
+
     if config.bearer_auth.enabled and config.bearer_auth.token:
         from mcp.server.auth.provider import AccessToken, TokenVerifier
-
+        
+        auth_settings = SecretAuthSettings()
+        
         expected_token = config.bearer_auth.token
 
         class SimpleTokenVerifier(TokenVerifier):
             async def verify_token(self, token: str) -> AccessToken | None:
-                if token == expected_token:
+                # Remove 'Bearer ' prefix if the client sends the full header
+                clean_token = token.replace("Bearer ", "") if token.startswith("Bearer ") else token
+                
+                if clean_token == expected_token:
                     return AccessToken(
-                        token=token,
+                        token=clean_token,
                         client_id="secretary-client",
                         scopes=[],
                     )
                 return None
 
         token_verifier = SimpleTokenVerifier()
-        logger.info("Bearer authentication enabled")
+        logger.info("Bearer authentication configured from config file")
 
     server = FastMCP(
         "Secretary",
@@ -137,12 +144,12 @@ def create_server(
         host=host,
         port=port,
         token_verifier=token_verifier,
+        auth_settings=auth_settings, # <--- CRITICAL FIX
     )
 
     _register_tools(server, config)
 
     return server
-
 
 def _register_tools(server: FastMCP, config: ServerConfig) -> None:
     @server.tool()
