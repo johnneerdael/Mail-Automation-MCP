@@ -41,7 +41,8 @@ export default defineConfig({
             { text: 'Threading', link: '/guide/threading' },
             { text: 'Agent Patterns', link: '/guide/agents' },
             { text: 'Use Cases', link: '/guide/use-cases' },
-            { text: 'OpenCode Integration', link: '/guide/opencode' }
+            { text: 'OpenCode Integration', link: '/guide/opencode' },
+            { text: 'Mutation Journal', link: '/guide/mutation-journal' }
           ]
         }
       ],
