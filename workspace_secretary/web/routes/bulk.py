@@ -155,6 +155,30 @@ async def bulk_move(request: Request, session: Session = Depends(require_auth)):
     )
 
 
+@router.post("/api/email/toggle-star/{folder}/{uid}")
+async def toggle_star(folder: str, uid: int, session: Session = Depends(require_auth)):
+    from workspace_secretary.web import database as db
+
+    email = db.get_email(uid, folder)
+    if not email:
+        return JSONResponse(
+            {"status": "error", "message": "Email not found"}, status_code=404
+        )
+
+    labels = email.get("gmail_labels", [])
+    if isinstance(labels, str):
+        is_starred = "\\Starred" in labels
+    else:
+        is_starred = "\\Starred" in (labels or [])
+
+    if is_starred:
+        await engine_client.modify_labels(uid, folder, ["\\Starred"], "remove")
+        return JSONResponse({"status": "success", "starred": False})
+    else:
+        await engine_client.modify_labels(uid, folder, ["\\Starred"], "add")
+        return JSONResponse({"status": "success", "starred": True})
+
+
 @router.post("/api/bulk/label")
 async def bulk_label(request: Request, session: Session = Depends(require_auth)):
     data = await request.json()

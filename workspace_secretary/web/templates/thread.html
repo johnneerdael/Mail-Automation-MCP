@@ -41,6 +41,13 @@
                         title="Toggle AI Analysis">
                     🤖
                 </button>
+                <button hx-post="/api/email/toggle-star/{{ folder }}/{{ uid }}"
+                        hx-swap="none"
+                        hx-on::after-request="this.textContent = event.detail.xhr.response.includes('true') ? '★' : '☆'"
+                        class="p-2 sm:p-2 text-lg {% if is_starred %}text-yellow-400{% else %}text-gray-600 hover:text-gray-400{% endif %} hover:bg-gray-800 rounded-md touch-manipulation"
+                        title="Toggle star">
+                    {% if is_starred %}★{% else %}☆{% endif %}
+                </button>
                 <button hx-post="/api/email/toggle-read/{{ folder }}/{{ uid }}" 
                         hx-swap="none"
                         class="p-2 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-md touch-manipulation" 
@@ -149,6 +156,15 @@
             </div>
             {% endfor %}
         </div>
+
+        {% if not load_images %}
+        <div class="flex justify-center">
+            <a href="/thread/{{ folder }}/{{ uid }}?load_images=true&unread_only={{ 'true' if unread_only else 'false' }}"
+               class="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation">
+                🖼️ Load Remote Images
+            </a>
+        </div>
+        {% endif %}
 
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             {% if calendar_invite %}

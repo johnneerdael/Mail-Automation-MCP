@@ -77,6 +77,15 @@
                                :checked="isSelected('{{ email.uid }}')"
                                class="rounded bg-gray-800 border-gray-700 text-primary focus:ring-primary">
                     </label>
+                    <button hx-post="/api/email/toggle-star/{{ email.folder }}/{{ email.uid }}"
+                            hx-swap="none"
+                            hx-on::after-request="this.querySelector('span').textContent = event.detail.xhr.response.includes('true') ? '★' : '☆'; this.querySelector('span').classList.toggle('text-yellow-400', event.detail.xhr.response.includes('true'))"
+                            class="flex items-center py-4 pr-1 touch-manipulation"
+                            title="Toggle star">
+                        <span class="text-lg {% if email.is_starred %}text-yellow-400{% else %}text-gray-600 hover:text-gray-400{% endif %}">
+                            {% if email.is_starred %}★{% else %}☆{% endif %}
+                        </span>
+                    </button>
                     <a href="/thread/{{ email.folder }}/{{ email.uid }}" 
                        class="flex-1 py-3 pr-3 sm:pr-4 touch-manipulation">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
@@ -129,12 +138,24 @@
         {% endif %}
     </div>
 
+    {% if has_more %}
+    <div id="infinite-scroll-trigger"
+         hx-get="/inbox/more?page={{ page + 1 }}&folder={{ folder }}&unread_only={{ unread_only }}"
+         hx-trigger="revealed"
+         hx-swap="afterend"
+         hx-select="#more-emails-content"
+         class="flex justify-center py-4">
+        <span class="text-sm text-gray-500">Loading more...</span>
+    </div>
+    {% endif %}
+    
+    <noscript>
     {% if has_more or page > 1 %}
-    <div class="flex justify-between items-center gap-2">
+    <div class="flex justify-between items-center gap-2 mt-4">
         {% if page > 1 %}
         <a href="/inbox?page={{ page - 1 }}&folder={{ folder }}&unread_only={{ unread_only }}"
-           class="px-3 sm:px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation">
-            ← <span class="hidden sm:inline">Previous</span>
+           class="px-3 sm:px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800">
+            ← Previous
         </a>
         {% else %}
         <div></div>
@@ -144,14 +165,15 @@
         
         {% if has_more %}
         <a href="/inbox?page={{ page + 1 }}&folder={{ folder }}&unread_only={{ unread_only }}"
-           class="px-3 sm:px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800 touch-manipulation">
-            <span class="hidden sm:inline">Next</span> →
+           class="px-3 sm:px-4 py-2 text-sm font-medium text-gray-300 bg-gray-900 border border-gray-700 rounded-md hover:bg-gray-800">
+            Next →
         </a>
         {% else %}
         <div></div>
         {% endif %}
     </div>
     {% endif %}
+    </noscript>
 </div>
 
 <script>

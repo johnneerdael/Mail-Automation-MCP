@@ -34,7 +34,7 @@ def extract_name(addr: str) -> str:
     return addr.split("@")[0]
 
 
-def sanitize_html(html_content: str) -> str:
+def sanitize_html(html_content: str, block_images: bool = True) -> str:
     if not html_content:
         return ""
     html_content = re.sub(
@@ -46,6 +46,15 @@ def sanitize_html(html_content: str) -> str:
     html_content = re.sub(
         r"\son\w+\s*=", " data-removed=", html_content, flags=re.IGNORECASE
     )
+
+    if block_images:
+        html_content = re.sub(
+            r'<img([^>]*)\ssrc=["\']([^"\']*)["\']',
+            r'<img\1 data-src="\2" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect width=\'100\' height=\'100\' fill=\'%23374151\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%23d1d5db\' font-size=\'12\'%3EImage%3C/text%3E%3C/svg%3E"',
+            html_content,
+            flags=re.IGNORECASE,
+        )
+
     return html_content
 
 
@@ -129,11 +138,18 @@ async def thread_view(
     folder: str,
     uid: int,
     unread_only: bool = Query(False),
+    load_images: bool = Query(False),
     session: Session = Depends(require_auth),
 ):
     email = db.get_email(uid, folder)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
+
+    labels = email.get("gmail_labels", [])
+    if isinstance(labels, str):
+        is_starred = "\\Starred" in labels
+    else:
+        is_starred = "\\Starred" in (labels or [])
 
     thread_emails = db.get_thread(uid, folder)
     if not thread_emails:
@@ -148,7 +164,11 @@ async def thread_view(
     for e in thread_emails:
         body_html = e.get("body_html", "")
         body_text = e.get("body_text", "")
-        content = sanitize_html(body_html) if body_html else text_to_html(body_text)
+        content = (
+            sanitize_html(body_html, block_images=not load_images)
+            if body_html
+            else text_to_html(body_text)
+        )
 
         if not calendar_invite:
             calendar_invite = detect_calendar_invite(e)
@@ -181,6 +201,8 @@ async def thread_view(
             "messages": messages,
             "folder": folder,
             "uid": uid,
+            "is_starred": is_starred,
+            "load_images": load_images,
             "neighbors": neighbors,
             "unread_only": unread_only,
             "calendar_invite": calendar_invite,

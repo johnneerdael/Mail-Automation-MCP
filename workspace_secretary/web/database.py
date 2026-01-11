@@ -59,7 +59,8 @@ def get_inbox_emails(
 ) -> list[dict]:
     sql = """
         SELECT uid, folder, from_addr, subject, 
-               LEFT(body_text, 200) as preview, date, is_unread, has_attachments
+               LEFT(body_text, 200) as preview, date, is_unread, has_attachments,
+               gmail_labels
         FROM emails 
         WHERE folder = %s {unread_filter}
         ORDER BY date DESC 

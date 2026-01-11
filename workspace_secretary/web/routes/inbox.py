@@ -12,6 +12,17 @@ router = APIRouter()
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
+def is_starred(email: dict) -> bool:
+    labels = email.get("gmail_labels")
+    if not labels:
+        return False
+    if isinstance(labels, str):
+        return "\\Starred" in labels
+    if isinstance(labels, list):
+        return "\\Starred" in labels
+    return False
+
+
 def format_date(date_val) -> str:
     if not date_val:
         return ""
@@ -73,6 +84,7 @@ async def inbox(
             "preview": truncate(e.get("preview") or "", 120),
             "date": format_date(e.get("date")),
             "is_unread": e.get("is_unread", False),
+            "is_starred": is_starred(e),
             "has_attachments": e.get("has_attachments", False),
         }
         for e in emails_raw
@@ -117,6 +129,7 @@ async def emails_partial(
             "preview": truncate(e.get("preview") or "", 120),
             "date": format_date(e.get("date")),
             "is_unread": e.get("is_unread", False),
+            "is_starred": is_starred(e),
             "has_attachments": e.get("has_attachments", False),
         }
         for e in emails_raw
@@ -125,6 +138,50 @@ async def emails_partial(
     return templates.TemplateResponse(
         "partials/email_list.html",
         {"request": request, "emails": emails, "page": page, "has_more": has_more},
+    )
+
+
+@router.get("/inbox/more", response_class=HTMLResponse)
+async def inbox_more(
+    request: Request,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=10, le=100),
+    folder: str = Query("INBOX"),
+    unread_only: bool = Query(False),
+    session: Session = Depends(require_auth),
+):
+    offset = (page - 1) * per_page
+    emails_raw = db.get_inbox_emails(folder, per_page + 1, offset, unread_only)
+
+    has_more = len(emails_raw) > per_page
+    emails_raw = emails_raw[:per_page]
+
+    emails = [
+        {
+            "uid": e["uid"],
+            "folder": e["folder"],
+            "from_name": extract_name(e.get("from_addr", "")),
+            "from_addr": e.get("from_addr", ""),
+            "subject": e.get("subject", "(no subject)"),
+            "preview": truncate(e.get("preview") or "", 120),
+            "date": format_date(e.get("date")),
+            "is_unread": e.get("is_unread", False),
+            "is_starred": is_starred(e),
+            "has_attachments": e.get("has_attachments", False),
+        }
+        for e in emails_raw
+    ]
+
+    return templates.TemplateResponse(
+        "partials/inbox_more.html",
+        {
+            "request": request,
+            "emails": emails,
+            "page": page,
+            "has_more": has_more,
+            "folder": folder,
+            "unread_only": unread_only,
+        },
     )
 
 
