@@ -1,12 +1,29 @@
-{% if mode == 'new' %}
 <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
-     x-data="{ sending: false }"
+     x-data="{ 
+         sending: false,
+         lastSaved: null,
+         autoSaveTimer: null,
+         attachments: [],
+         showValidation: false,
+         validationErrors: [],
+         scheduleDateTime: null
+     }"
+     x-init="
+         autoSaveTimer = setInterval(() => {
+             if ({{ 'true' if reply_to_uid else 'false' }}) {
+                 const form = $el.querySelector('form');
+                 const formData = new FormData(form);
+                 fetch('/api/email/draft', {
+                     method: 'POST',
+                     body: formData
+                 }).then(() => {
+                     lastSaved = new Date();
+                 });
+             }
+         }, 30000);
+     "
+     x-effect="() => { if ($el.dataset.cleanup !== 'done') { return () => { clearInterval(autoSaveTimer); $el.dataset.cleanup = 'done'; }; } }"
      @keydown.escape.window="$el.remove()">
-{% else %}
-<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
-     x-data="{ sending: false }"
-     @keydown.escape.window="$el.remove()">
-{% endif %}
     <div class="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800">
             <h2 class="text-lg font-semibold text-white">
@@ -34,10 +51,36 @@
             
             <div class="px-4 py-2 space-y-2 border-b border-gray-800">
                 <div class="flex items-center">
+                    <label class="w-16 text-sm text-gray-400">From:</label>
+                    <select name="from_alias" 
+                            class="flex-1 bg-transparent text-white text-sm focus:outline-none">
+                        <option value="default">Primary Account</option>
+                    </select>
+                </div>
+                <div class="flex items-center relative" x-data="{ suggestions: [], showSuggestions: false }">
                     <label class="w-16 text-sm text-gray-400">To:</label>
                     <input type="email" name="to" value="{{ to }}" required
+                           @input="
+                               if ($event.target.value.length > 2) {
+                                   fetch('/api/contacts/autocomplete?q=' + encodeURIComponent($event.target.value))
+                                       .then(r => r.json())
+                                       .then(data => { suggestions = data.contacts; showSuggestions = true; });
+                               } else {
+                                   showSuggestions = false;
+                               }
+                           "
+                           @blur="setTimeout(() => showSuggestions = false, 200)"
                            class="flex-1 bg-transparent text-white text-sm focus:outline-none placeholder-gray-600"
                            placeholder="recipient@example.com">
+                    <div x-show="showSuggestions && suggestions.length > 0" 
+                         class="absolute top-full left-16 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-10 w-64">
+                        <template x-for="contact in suggestions" :key="contact">
+                            <button type="button" 
+                                    @click="$el.closest('.relative').querySelector('input').value = contact; showSuggestions = false"
+                                    class="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-700"
+                                    x-text="contact"></button>
+                        </template>
+                    </div>
                 </div>
                 <div class="flex items-center">
                     <label class="w-16 text-sm text-gray-400">Cc:</label>
@@ -69,19 +112,57 @@
                 </div>
             </div>
             
-            <div class="flex-1 overflow-auto p-4">
-                <textarea name="body" 
+            <div class="flex-1 overflow-auto p-4" x-data="{ richText: false }">
+                <div class="flex items-center justify-end mb-2">
+                    <button type="button" 
+                            @click="richText = !richText"
+                            class="text-xs text-gray-500 hover:text-gray-300">
+                        <span x-show="!richText">📝 Enable Rich Text</span>
+                        <span x-show="richText">📄 Plain Text</span>
+                    </button>
+                </div>
+                <div x-show="richText" class="mb-2 flex gap-1 border-b border-gray-700 pb-2">
+                    <button type="button" onclick="document.execCommand('bold')" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded" title="Bold">B</button>
+                    <button type="button" onclick="document.execCommand('italic')" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded italic" title="Italic">I</button>
+                    <button type="button" onclick="document.execCommand('underline')" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded underline" title="Underline">U</button>
+                    <button type="button" onclick="document.execCommand('insertUnorderedList')" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded" title="Bullet List">•</button>
+                    <button type="button" onclick="document.execCommand('insertOrderedList')" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded" title="Numbered List">1.</button>
+                    <button type="button" onclick="document.execCommand('createLink', false, prompt('Enter URL:'))" class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 rounded" title="Link">🔗</button>
+                </div>
+                <textarea name="body" x-show="!richText"
                           class="w-full h-full min-h-[300px] bg-transparent text-white text-sm focus:outline-none resize-none placeholder-gray-600"
                           placeholder="Write your message...">{{ body }}</textarea>
+                <div x-show="richText" 
+                     contenteditable="true"
+                     class="w-full h-full min-h-[300px] bg-transparent text-white text-sm focus:outline-none overflow-auto"
+                     @input="$el.closest('.overflow-auto').querySelector('textarea').value = $el.innerHTML">{{ body }}</div>
             </div>
             
             <div class="flex items-center justify-between px-4 py-3 border-t border-gray-800">
                 <div class="flex items-center space-x-2">
                     <button type="button" 
+                            @click="$refs.fileInput.click()"
                             class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded"
-                            title="Attach file (coming soon)" disabled>
+                            title="Attach file">
                         📎
                     </button>
+                    <input type="file" x-ref="fileInput" multiple class="hidden"
+                           @change="attachments = Array.from($event.target.files)">
+                    <span x-show="attachments.length > 0" class="text-xs text-gray-500" x-text="attachments.length + ' file(s)'"></span>
+                    
+                    <button type="button" 
+                            @click="$refs.scheduleInput.showPicker()"
+                            class="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded"
+                            title="Schedule send">
+                        ⏰
+                    </button>
+                    <input type="datetime-local" x-ref="scheduleInput" name="schedule_time" class="hidden"
+                           @change="scheduleDateTime = $event.target.value">
+                    <span x-show="scheduleDateTime" class="text-xs text-gray-500">Scheduled</span>
+                    
+                    <span x-show="lastSaved" class="text-xs text-gray-500">
+                        Saved <span x-text="Math.floor((Date.now() - lastSaved) / 1000)"></span>s ago
+                    </span>
                 </div>
                 <div class="flex items-center space-x-2">
                     <button type="button" 
@@ -91,11 +172,55 @@
                     </button>
                     <button type="submit" 
                             :disabled="sending"
+                            @click.prevent="
+                                validationErrors = [];
+                                const form = $el.closest('form');
+                                const subject = form.querySelector('[name=subject]').value;
+                                const body = form.querySelector('[name=body]').value;
+                                const to = form.querySelector('[name=to]').value;
+                                
+                                if (!to) validationErrors.push('Recipient is required');
+                                if (!subject) validationErrors.push('Subject is missing');
+                                if (attachments.length === 0 && /attach/i.test(body)) {
+                                    validationErrors.push('Did you forget to attach a file?');
+                                }
+                                
+                                if (validationErrors.length > 0) {
+                                    showValidation = true;
+                                    setTimeout(() => { showValidation = false; validationErrors = []; }, 5000);
+                                } else {
+                                    sending = true;
+                                    const formData = new FormData(form);
+                                    fetch('/api/email/send', { method: 'POST', body: formData })
+                                        .then(r => r.json())
+                                        .then(data => {
+                                            if (data.success) {
+                                                $el.closest('.fixed').remove();
+                                                window.showToast('Email will be sent in 5 seconds. Click to undo.', 'success', 5000, () => {
+                                                    window.showToast('Send cancelled', 'info');
+                                                });
+                                            } else {
+                                                sending = false;
+                                                window.showToast('Failed to send: ' + data.error, 'error');
+                                            }
+                                        });
+                                }
+                            "
                             class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">
                         <span x-show="!sending">Send</span>
                         <span x-show="sending">Sending...</span>
                     </button>
                 </div>
+            </div>
+            
+            <div x-show="showValidation" 
+                 x-transition
+                 class="absolute top-4 right-4 bg-yellow-900 border border-yellow-700 text-yellow-200 px-4 py-2 rounded-md shadow-lg">
+                <ul class="text-sm">
+                    <template x-for="error in validationErrors">
+                        <li x-text="error"></li>
+                    </template>
+                </ul>
             </div>
         </form>
     </div>

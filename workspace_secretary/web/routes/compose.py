@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Request, Query, Form, Depends
+from fastapi import APIRouter, Request, Query, Form, Depends, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from workspace_secretary.web import database as db
 from workspace_secretary.web import engine_client as engine
@@ -21,7 +21,8 @@ async def compose_modal(
     folder: str = Query("INBOX"),
     session: Session = Depends(require_auth),
 ):
-    """Render compose modal - new email, reply, reply all, or forward."""
+    signature = "\n\n--\nSent from Gmail Secretary"
+
     context = {
         "request": request,
         "mode": "new",
@@ -29,7 +30,7 @@ async def compose_modal(
         "cc": "",
         "bcc": "",
         "subject": "",
-        "body": "",
+        "body": signature,
         "reply_to_uid": None,
         "reply_to_folder": folder,
         "original_message_id": None,
@@ -111,10 +112,29 @@ async def send_email(
     cc: Optional[str] = Form(None),
     bcc: Optional[str] = Form(None),
     reply_to_message_id: Optional[str] = Form(None),
+    attachments: List[UploadFile] = File(default=[]),
+    schedule_time: Optional[str] = Form(None),
     session: Session = Depends(require_auth),
 ):
-    """Send an email via Engine API."""
     try:
+        if attachments:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": "Attachment support coming soon - engine needs update",
+                },
+                status_code=501,
+            )
+
+        if schedule_time:
+            return JSONResponse(
+                {
+                    "success": False,
+                    "error": "Scheduled send coming soon - needs queue implementation",
+                },
+                status_code=501,
+            )
+
         result = await engine.send_email(
             to=to,
             subject=subject,
@@ -126,6 +146,22 @@ async def send_email(
         return JSONResponse({"success": True, "message": "Email sent successfully"})
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/api/contacts/autocomplete")
+async def contacts_autocomplete(
+    q: str = Query(..., min_length=1),
+    session: Session = Depends(require_auth),
+):
+    emails_raw = db.get_inbox_emails("INBOX", limit=100, offset=0)
+    contacts = set()
+    for email in emails_raw:
+        addr = email.get("from_addr", "")
+        if addr and q.lower() in addr.lower():
+            contacts.add(addr)
+        if len(contacts) >= 10:
+            break
+    return JSONResponse({"contacts": list(contacts)})
 
 
 @router.post("/api/email/draft")
