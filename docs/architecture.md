@@ -1,8 +1,8 @@
-# Architecture v4.3.0
+# Architecture v4.8.0
 
 This document describes the Gmail Secretary architecture including the 3-process deployment model, sync engine implementation, IMAP connection pooling, and the IDLE threading model.
 
-## Deployment Architecture (v4.3.0+)
+## Deployment Architecture (v4.8.0+)
 
 Gmail Secretary runs as three coordinated processes managed by supervisord:
 
@@ -94,6 +94,37 @@ command=uv run python -m workspace_secretary.web.main
 autostart=true
 autorestart=true
 ```
+
+## Database Layer Architecture (v4.8.0+)
+
+The database layer is organized into modular query modules for maintainability and testability:
+
+```
+workspace_secretary/
+├── db/
+│   ├── types.py              # DatabaseInterface protocol
+│   ├── schema.py             # DDL (CREATE TABLE, indexes)
+│   ├── postgres.py           # Connection pooling base class
+│   └── queries/              # Shared SQL query modules
+│       ├── emails.py         # 22 email operations
+│       ├── embeddings.py     # 6 semantic search functions
+│       ├── contacts.py       # 12 contact functions
+│       ├── calendar.py       # 10 calendar functions
+│       ├── preferences.py    # 2 user preference functions
+│       └── mutations.py      # 4 mutation journal functions
+├── engine/
+│   └── database.py           # Delegates to db/queries
+└── web/
+    └── database.py           # Delegates to db/queries (read-only)
+```
+
+### Design Principles
+
+- **Single Source of Truth**: All SQL queries live in `db/queries/` modules
+- **Pure Functions**: Query functions accept `DatabaseInterface` and return data
+- **No Duplication**: Engine and web both use the same query modules
+- **Better Testing**: Query functions can be tested independently
+- **Clear Boundaries**: Engine keeps self-healing logic, queries stay pure
 
 ## Sync Architecture Overview
 

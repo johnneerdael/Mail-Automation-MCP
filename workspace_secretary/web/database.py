@@ -63,6 +63,16 @@ def get_conn():
         yield conn
 
 
+def get_pool():
+    """Compatibility function - returns underlying connection pool.
+
+    DEPRECATED: Use get_db() or get_conn() instead.
+    This function exists for backward compatibility with route handlers
+    that directly accessed the connection pool.
+    """
+    return get_db()._pool
+
+
 def get_inbox_emails(
     folder: str, limit: int, offset: int, unread_only: bool = False
 ) -> list[dict]:
