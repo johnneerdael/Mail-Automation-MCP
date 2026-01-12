@@ -174,11 +174,11 @@
             
             {% for hour in range(24) %}
             <div class="border-r border-border px-2 py-2 text-xs text-muted text-right"
-                 :class="{ 'bg-blue-50/50 dark:bg-blue-950/20': showWorkingHours && isWorkingHour({{ hour }}) }">
+                 :style="showWorkingHours && isWorkingHour({{ hour }}) ? 'background-color: rgba(59, 130, 246, 0.05);' : ''">
                 {{ '%02d:00'|format(hour) }}
             </div>
             <div class="border-t border-border min-h-[60px] relative"
-                 :class="{ 'bg-blue-50/30 dark:bg-blue-950/10': showWorkingHours && isWorkingHour({{ hour }}) }">
+                 :style="showWorkingHours && isWorkingHour({{ hour }}) ? 'background-color: rgba(59, 130, 246, 0.03);' : ''">
                 {% for event in day_events %}
                 {% if event.start.dateTime %}
                 {% set event_hour = event.start.dateTime[11:13]|int %}
@@ -253,7 +253,7 @@
         <div class="card p-0 overflow-hidden">
             <div class="bg-surface-subtle px-4 py-2 border-b border-border">
                 <span class="text-sm font-medium text-body">
-                    {{ events_list[0].start.dateTime[:10] | strftime('%A, %B %d, %Y') }}
+                    {{ events_list[0].start.dateTime | strftime('%A, %B %d, %Y') }}
                 </span>
             </div>
             <div class="divide-y divide-border">
@@ -394,7 +394,7 @@
                         <div class="flex-1">
                             <div class="text-sm text-muted">Video Conference</div>
                             <a :href="selectedEvent?.hangoutLink" target="_blank" 
-                               class="text-blue-600 dark:text-blue-400 hover:underline">
+                               class="link">
                                 Join Google Meet
                             </a>
                         </div>
@@ -447,7 +447,7 @@
                         <div class="flex-1">
                             <div class="text-sm text-muted">Calendar Link</div>
                             <a :href="selectedEvent?.htmlLink" target="_blank" 
-                               class="text-blue-600 dark:text-blue-400 hover:underline text-sm">
+                               class="link text-sm">
                                 View in Google Calendar
                             </a>
                         </div>

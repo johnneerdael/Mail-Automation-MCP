@@ -298,7 +298,7 @@
                             {% if message.attachment_filenames|length > 1 %}
                             <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/download-all"
                                download="attachments_{{ message.uid }}.zip"
-                               class="text-xs text-primary hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1">
+                               class="link text-xs flex items-center gap-1">
                                 📦 Download All ({{ message.attachment_filenames|length }})
                             </a>
                             {% endif %}
@@ -325,7 +325,7 @@
                                 {% endif %}
                                 <a href="/api/attachment/{{ message.folder }}/{{ message.uid }}/{{ filename }}" 
                                    download="{{ filename }}"
-                                   class="{{ 'text-red-400 hover:text-red-300' if is_suspicious else 'text-primary hover:text-blue-600 dark:hover:text-blue-400' }}"
+                                   class="{{ 'text-red-400 hover:text-red-300' if is_suspicious else 'link' }}"
                                    title="{{ 'WARNING: Download with caution' if is_suspicious else 'Download' }}">⬇</a>
                             </div>
                             {% endfor %}

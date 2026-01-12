@@ -5,8 +5,8 @@
 <div class="space-y-6">
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-2xl font-bold text-white">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 17 else 'evening') }}</h1>
-            <p class="text-gray-400 text-sm">{{ now.strftime('%A, %B %d') }}</p>
+            <h1 class="h1">Good {{ 'morning' if now.hour < 12 else ('afternoon' if now.hour < 17 else 'evening') }}</h1>
+            <p class="text-subtle">{{ now.strftime('%A, %B %d') }}</p>
         </div>
         <div class="flex items-center space-x-4" hx-get="/api/stats" hx-trigger="every 60s" hx-swap="innerHTML">
             {% include "partials/stats_badges.html" %}
@@ -18,13 +18,15 @@
             <div class="card">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="h2">🔥 Priority Emails</h2>
-                    <a href="/inbox" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">View all →</a>
+                    <a href="/inbox" class="link text-sm no-underline">View all →</a>
                 </div>
                 {% if priority_emails %}
                 <div class="space-y-2">
                     {% for email in priority_emails %}
                     <a href="/thread/{{ email.folder }}/{{ email.uid }}" 
-                       class="block p-3 bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-transparent hover:border-border">
+                       style="display: block; padding: 0.75rem; background-color: var(--color-surface-subtle); border-radius: 0.5rem; border: 1px solid transparent; transition: all 150ms;"
+                       onmouseover="this.style.backgroundColor='var(--color-surface-hover)'; this.style.borderColor='var(--color-border)';"
+                       onmouseout="this.style.backgroundColor='var(--color-surface-subtle)'; this.style.borderColor='transparent';">
                         <div class="flex items-start justify-between">
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center space-x-2 mb-1">
@@ -61,7 +63,7 @@
             <div class="card">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="h2">📥 Recent Unread</h2>
-                    <a href="/inbox?unread=true" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">View all →</a>
+                    <a href="/inbox?unread=true" class="link text-sm no-underline">View all →</a>
                 </div>
                 <div hx-get="/inbox/partial?limit=5&unread_only=true" hx-trigger="load" hx-swap="innerHTML">
                     <div class="animate-pulse space-y-2">
@@ -77,7 +79,7 @@
             <div class="card">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="h2">📅 Today's Schedule</h2>
-                    <a href="/calendar" class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 no-underline">Full calendar →</a>
+                    <a href="/calendar" class="link text-sm no-underline">Full calendar →</a>
                 </div>
                 {% if upcoming_events %}
                 <div class="space-y-3">
@@ -118,15 +120,21 @@
                     <button hx-get="/compose" 
                             hx-target="body" 
                             hx-swap="beforeend"
-                            class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600">
+                            style="width: 100%; display: flex; align-items: center; padding: 0.5rem 0.75rem; font-size: 0.875rem; text-align: left; color: var(--color-body); background-color: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: 0.5rem; transition: all 150ms;"
+                            onmouseover="this.style.backgroundColor='var(--color-surface-hover)'; this.style.borderColor='var(--color-muted)';"
+                            onmouseout="this.style.backgroundColor='var(--color-surface-subtle)'; this.style.borderColor='var(--color-border)';">
                         <span class="mr-2">✏️</span> Compose Email
                     </button>
                     <a href="/calendar" 
-                       class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600 no-underline">
+                       style="width: 100%; display: flex; align-items: center; padding: 0.5rem 0.75rem; font-size: 0.875rem; text-align: left; color: var(--color-body); background-color: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: 0.5rem; transition: all 150ms; text-decoration: none;"
+                       onmouseover="this.style.backgroundColor='var(--color-surface-hover)'; this.style.borderColor='var(--color-muted)';"
+                       onmouseout="this.style.backgroundColor='var(--color-surface-subtle)'; this.style.borderColor='var(--color-border)';">
                         <span class="mr-2">📅</span> View Calendar
                     </a>
                     <a href="/search" 
-                       class="w-full flex items-center px-3 py-2 text-sm text-left text-body bg-surface-subtle hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors border border-border hover:border-gray-300 dark:hover:border-gray-600 no-underline">
+                       style="width: 100%; display: flex; align-items: center; padding: 0.5rem 0.75rem; font-size: 0.875rem; text-align: left; color: var(--color-body); background-color: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: 0.5rem; transition: all 150ms; text-decoration: none;"
+                       onmouseover="this.style.backgroundColor='var(--color-surface-hover)'; this.style.borderColor='var(--color-muted)';"
+                       onmouseout="this.style.backgroundColor='var(--color-surface-subtle)'; this.style.borderColor='var(--color-border)';">
                         <span class="mr-2">🔍</span> Search Emails
                     </a>
                 </div>

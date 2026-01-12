@@ -337,13 +337,25 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if method in {"POST", "PUT", "PATCH", "DELETE"}:
             session = get_session(request)
             if session:
-                expected = session.csrf_token or ""
-                provided = request.headers.get(CSRF_HEADER) or ""
-                if (
-                    not expected
-                    or not provided
-                    or not hmac.compare_digest(provided, expected)
+                expected_csrf_token = session.csrf_token or ""
+                provided_csrf_token = request.headers.get(CSRF_HEADER) or ""
+
+                if not expected_csrf_token:
+                    logger.debug(
+                        f"Skipping CSRF validation for {request.method} {request.url.path} - "
+                        f"session has no CSRF token (legacy session)"
+                    )
+                    return await call_next(request)
+
+                if not provided_csrf_token or not hmac.compare_digest(
+                    provided_csrf_token, expected_csrf_token
                 ):
+                    logger.warning(
+                        f"CSRF validation failed for {request.method} {request.url.path} - "
+                        f"Expected token present: {bool(expected_csrf_token)}, "
+                        f"Provided token present: {bool(provided_csrf_token)}, "
+                        f"Match: {hmac.compare_digest(provided_csrf_token, expected_csrf_token) if (expected_csrf_token and provided_csrf_token) else 'N/A'}"
+                    )
                     raise HTTPException(
                         status_code=403, detail="CSRF token missing or invalid"
                     )
