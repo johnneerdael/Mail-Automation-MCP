@@ -10,7 +10,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from workspace_secretary.config import load_config
-from workspace_secretary.web.database import get_pool, initialize_pool
 
 
 def check_contacts_tables():
@@ -21,8 +20,17 @@ def check_contacts_tables():
         f"Database config: {config.database.postgres.database} @ {config.database.postgres.host}:{config.database.postgres.port}\n"
     )
 
-    initialize_pool(config)
-    pool = get_pool()
+    import psycopg_pool
+
+    pool = psycopg_pool.ConnectionPool(
+        conninfo=f"host={config.database.postgres.host} "
+        f"port={config.database.postgres.port} "
+        f"dbname={config.database.postgres.database} "
+        f"user={config.database.postgres.user} "
+        f"password={config.database.postgres.password}",
+        min_size=1,
+        max_size=5,
+    )
 
     print("✓ Database connection successful\n")
 
