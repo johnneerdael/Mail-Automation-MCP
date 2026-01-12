@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0] - 2026-01-12
+
+### Changed
+- **Database Layer Refactoring (Phase 3 Complete)**: Extracted all database queries to shared modules
+  - Created 6 new query modules with 56 functions total:
+    - `db/queries/emails.py`: 22 email operations including `get_synced_folders()`
+    - `db/queries/embeddings.py`: 6 semantic search functions
+    - `db/queries/contacts.py`: 12 contact management functions
+    - `db/queries/calendar.py`: 10 calendar sync functions
+    - `db/queries/preferences.py`: 2 user preference functions
+    - `db/queries/mutations.py`: 4 mutation journal functions
+  - Eliminated ~1,070 lines of duplicate SQL between engine and web layers
+  - Single source of truth for all database operations
+  - Better testability with pure query functions
+  - Zero API changes - complete backward compatibility maintained
+
+### Technical Details
+- `engine/database.py`: Replaced SQL implementations with delegations to query modules
+- `web/database.py`: Delegates to shared query modules (read-only)
+- `tools.py` and `resources.py`: No changes needed (use `DatabaseInterface`)
+- Engine retains self-healing logic for embeddings schema (by design)
+- All files compile cleanly with no LSP errors
+
 ## [4.7.2] - 2026-01-12
 
 ### Fixed

@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from workspace_secretary.db.types import DatabaseConnection, DatabaseInterface
+from workspace_secretary.db.queries import emails as email_q
+from workspace_secretary.db.queries import embeddings as emb_q
+from workspace_secretary.db.queries import contacts as contact_q
+from workspace_secretary.db.queries import calendar as cal_q
+from workspace_secretary.db.queries import preferences as pref_q
+from workspace_secretary.db.queries import mutations as mut_q
 
 logger = logging.getLogger(__name__)
 
@@ -444,103 +450,41 @@ class PostgresDatabase(DatabaseInterface):
         security_score: int = 100,
         warning_type: Optional[str] = None,
     ) -> None:
-        import hashlib
-
-        content = f"{subject or ''}{body_text}"
-        content_hash = hashlib.sha256(content.encode()).hexdigest()[:32]
-
-        gmail_labels_json = json.dumps(gmail_labels) if gmail_labels else None
-        attachment_filenames_json = (
-            json.dumps(attachment_filenames) if attachment_filenames else None
+        return email_q.upsert_email(
+            self,
+            uid,
+            folder,
+            message_id,
+            subject,
+            from_addr,
+            to_addr,
+            cc_addr,
+            bcc_addr,
+            date,
+            internal_date,
+            body_text,
+            body_html,
+            flags,
+            is_unread,
+            is_important,
+            size,
+            modseq,
+            in_reply_to,
+            references_header,
+            gmail_thread_id,
+            gmail_msgid,
+            gmail_labels,
+            has_attachments,
+            attachment_filenames,
+            auth_results_raw,
+            spf,
+            dkim,
+            dmarc,
+            is_suspicious_sender,
+            suspicious_sender_signals,
+            security_score,
+            warning_type,
         )
-        suspicious_sender_signals_json = (
-            json.dumps(suspicious_sender_signals) if suspicious_sender_signals else None
-        )
-
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO emails (
-                        uid, folder, message_id, subject, from_addr, to_addr, cc_addr,
-                        bcc_addr, date, internal_date, body_text, body_html, flags,
-                        is_unread, is_important, size, modseq, synced_at, in_reply_to,
-                        references_header, content_hash, gmail_thread_id, gmail_msgid,
-                        gmail_labels, has_attachments, attachment_filenames,
-                        auth_results_raw, spf, dkim, dmarc, is_suspicious_sender, suspicious_sender_signals,
-                        security_score, warning_type
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (uid, folder) DO UPDATE SET
-                        message_id = EXCLUDED.message_id,
-                        subject = EXCLUDED.subject,
-                        from_addr = EXCLUDED.from_addr,
-                        to_addr = EXCLUDED.to_addr,
-                        cc_addr = EXCLUDED.cc_addr,
-                        bcc_addr = EXCLUDED.bcc_addr,
-                        date = EXCLUDED.date,
-                        internal_date = EXCLUDED.internal_date,
-                        body_text = EXCLUDED.body_text,
-                        body_html = EXCLUDED.body_html,
-                        flags = EXCLUDED.flags,
-                        is_unread = EXCLUDED.is_unread,
-                        is_important = EXCLUDED.is_important,
-                        size = EXCLUDED.size,
-                        modseq = EXCLUDED.modseq,
-                        synced_at = NOW(),
-                        in_reply_to = EXCLUDED.in_reply_to,
-                        references_header = EXCLUDED.references_header,
-                        content_hash = EXCLUDED.content_hash,
-                        gmail_thread_id = EXCLUDED.gmail_thread_id,
-                        gmail_msgid = EXCLUDED.gmail_msgid,
-                        gmail_labels = EXCLUDED.gmail_labels,
-                        has_attachments = EXCLUDED.has_attachments,
-                        attachment_filenames = EXCLUDED.attachment_filenames,
-                        auth_results_raw = EXCLUDED.auth_results_raw,
-                        spf = EXCLUDED.spf,
-                        dkim = EXCLUDED.dkim,
-                        dmarc = EXCLUDED.dmarc,
-                        is_suspicious_sender = EXCLUDED.is_suspicious_sender,
-                        suspicious_sender_signals = EXCLUDED.suspicious_sender_signals,
-                        security_score = EXCLUDED.security_score,
-                        warning_type = EXCLUDED.warning_type
-                    """,
-                    (
-                        uid,
-                        folder,
-                        message_id,
-                        subject,
-                        from_addr,
-                        to_addr,
-                        cc_addr,
-                        bcc_addr,
-                        date,
-                        internal_date,
-                        body_text,
-                        body_html,
-                        flags,
-                        1 if is_unread else 0,
-                        1 if is_important else 0,
-                        size,
-                        modseq,
-                        in_reply_to,
-                        references_header,
-                        content_hash,
-                        gmail_thread_id,
-                        gmail_msgid,
-                        gmail_labels_json,
-                        has_attachments,
-                        attachment_filenames_json,
-                        auth_results_raw,
-                        spf,
-                        dkim,
-                        dmarc,
-                        is_suspicious_sender,
-                        suspicious_sender_signals_json,
-                        security_score,
-                        warning_type,
-                    ),
-                )
-                conn.commit()
 
     def update_email_flags(
         self,
@@ -551,43 +495,15 @@ class PostgresDatabase(DatabaseInterface):
         modseq: int,
         gmail_labels: Optional[list[str]] = None,
     ) -> None:
-        gmail_labels_json = json.dumps(gmail_labels) if gmail_labels else None
-
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE emails SET flags = %s, is_unread = %s, modseq = %s,
-                        gmail_labels = COALESCE(%s, gmail_labels), synced_at = NOW()
-                    WHERE uid = %s AND folder = %s
-                    """,
-                    (flags, is_unread, modseq, gmail_labels_json, uid, folder),
-                )
-                conn.commit()
+        return email_q.update_email_flags(
+            self, uid, folder, flags, is_unread, modseq, gmail_labels
+        )
 
     def get_email_by_uid(self, uid: int, folder: str) -> Optional[dict[str, Any]]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM emails WHERE uid = %s AND folder = %s", (uid, folder)
-                )
-                row = cur.fetchone()
-                if row:
-                    columns = [desc[0] for desc in cur.description]
-                    return dict(zip(columns, row))
-                return None
+        return email_q.get_email(self, uid, folder)
 
     def get_emails_by_uids(self, uids: list[int], folder: str) -> list[dict[str, Any]]:
-        if not uids:
-            return []
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM emails WHERE folder = %s AND uid = ANY(%s) ORDER BY date DESC",
-                    (folder, uids),
-                )
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+        return email_q.get_emails_by_uids(self, uids, folder)
 
     def search_emails(
         self,
@@ -599,102 +515,35 @@ class PostgresDatabase(DatabaseInterface):
         body_contains: Optional[str] = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        conditions = ["folder = %s"]
-        params: list[Any] = [folder]
-
-        if is_unread is not None:
-            conditions.append("is_unread = %s")
-            params.append(is_unread)
-
-        if from_addr:
-            conditions.append("from_addr ILIKE %s")
-            params.append(f"%{from_addr}%")
-
-        if to_addr:
-            conditions.append("to_addr ILIKE %s")
-            params.append(f"%{to_addr}%")
-
-        if subject_contains:
-            conditions.append("subject ILIKE %s")
-            params.append(f"%{subject_contains}%")
-
-        query = f"SELECT * FROM emails WHERE {' AND '.join(conditions)} ORDER BY date DESC LIMIT %s"
-        params.append(limit)
-
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(query, params)
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+        return email_q.search_emails(
+            self,
+            folder,
+            is_unread,
+            from_addr,
+            to_addr,
+            subject_contains,
+            body_contains,
+            limit,
+        )
 
     def delete_email(self, uid: int, folder: str) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "DELETE FROM emails WHERE uid = %s AND folder = %s", (uid, folder)
-                )
-                conn.commit()
+        return email_q.delete_email(self, uid, folder)
 
     def mark_email_read(self, uid: int, folder: str, is_read: bool) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                if is_read:
-                    cur.execute(
-                        """
-                        UPDATE emails SET is_unread = false
-                        WHERE uid = %s AND folder = %s
-                        """,
-                        (uid, folder),
-                    )
-                else:
-                    cur.execute(
-                        """
-                        UPDATE emails SET is_unread = true
-                        WHERE uid = %s AND folder = %s
-                        """,
-                        (uid, folder),
-                    )
-                conn.commit()
+        return email_q.mark_email_read(self, uid, folder, is_read)
 
     def get_folder_state(self, folder: str) -> Optional[dict[str, Any]]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT uidvalidity, uidnext, highestmodseq, last_sync FROM folder_state WHERE folder = %s",
-                    (folder,),
-                )
-                row = cur.fetchone()
-                if row:
-                    columns = [desc[0] for desc in cur.description]
-                    return dict(zip(columns, row))
-                return None
+        return email_q.get_folder_state(self, folder)
 
     def save_folder_state(
         self, folder: str, uidvalidity: int, uidnext: int, highestmodseq: int = 0
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO folder_state (folder, uidvalidity, uidnext, highestmodseq, last_sync)
-                    VALUES (%s, %s, %s, %s, NOW())
-                    ON CONFLICT (folder) DO UPDATE SET
-                        uidvalidity = EXCLUDED.uidvalidity,
-                        uidnext = EXCLUDED.uidnext,
-                        highestmodseq = EXCLUDED.highestmodseq,
-                        last_sync = NOW()
-                    """,
-                    (folder, uidvalidity, uidnext, highestmodseq),
-                )
-                conn.commit()
+        return email_q.save_folder_state(
+            self, folder, uidvalidity, uidnext, highestmodseq
+        )
 
     def clear_folder(self, folder: str) -> int:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM emails WHERE folder = %s", (folder,))
-                deleted = cur.rowcount
-                conn.commit()
-                return deleted
+        return email_q.clear_folder(self, folder)
 
     def create_mutation(
         self,
@@ -704,66 +553,20 @@ class PostgresDatabase(DatabaseInterface):
         params: Optional[dict] = None,
         pre_state: Optional[dict] = None,
     ) -> int:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO mutation_journal (email_uid, email_folder, action, params, pre_state)
-                    VALUES (%s, %s, %s, %s, %s)
-                    RETURNING id
-                    """,
-                    (
-                        email_uid,
-                        email_folder,
-                        action,
-                        json.dumps(params) if params else None,
-                        json.dumps(pre_state) if pre_state else None,
-                    ),
-                )
-                mutation_id = cur.fetchone()[0]
-                conn.commit()
-                return int(mutation_id)
+        return mut_q.create_mutation(
+            self, email_uid, email_folder, action, params, pre_state
+        )
 
     def update_mutation_status(
         self, mutation_id: int, status: str, error: Optional[str] = None
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE mutation_journal
-                    SET status = %s, error = %s, updated_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (status, error, mutation_id),
-                )
-                conn.commit()
+        return mut_q.update_mutation_status(self, mutation_id, status, error)
 
     def get_pending_mutations(self, email_uid: int, email_folder: str) -> list[dict]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT * FROM mutation_journal
-                    WHERE email_uid = %s AND email_folder = %s AND status = 'PENDING'
-                    ORDER BY created_at
-                    """,
-                    (email_uid, email_folder),
-                )
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+        return mut_q.get_pending_mutations(self, email_uid, email_folder)
 
     def get_mutation(self, mutation_id: int) -> Optional[dict]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM mutation_journal WHERE id = %s", (mutation_id,)
-                )
-                row = cur.fetchone()
-                if row:
-                    columns = [desc[0] for desc in cur.description]
-                    return dict(zip(columns, row))
-                return None
+        return mut_q.get_mutation(self, mutation_id)
 
     def log_sync_error(
         self,
@@ -772,30 +575,18 @@ class PostgresDatabase(DatabaseInterface):
         folder: Optional[str] = None,
         email_uid: Optional[int] = None,
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO sync_errors (folder, email_uid, error_type, error_message)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (folder, email_uid, error_type, error_message),
-                )
-                conn.commit()
+        return email_q.log_sync_error(
+            self, error_type, error_message, folder, email_uid
+        )
 
     def get_synced_uids(self, folder: str) -> list[int]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT uid FROM emails WHERE folder = %s", (folder,))
-                rows = cur.fetchall()
-                return [int(row[0]) for row in rows]
+        return email_q.get_synced_uids(self, folder)
 
     def count_emails(self, folder: str) -> int:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM emails WHERE folder = %s", (folder,))
-                row = cur.fetchone()
-                return int(row[0]) if row else 0
+        return email_q.count_emails(self, folder)
+
+    def get_synced_folders(self) -> list[dict[str, Any]]:
+        return email_q.get_synced_folders(self)
 
     def upsert_embedding(
         self,
@@ -805,51 +596,13 @@ class PostgresDatabase(DatabaseInterface):
         model: str,
         content_hash: str,
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO email_embeddings (email_uid, email_folder, embedding, model, content_hash)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (email_uid, email_folder) DO UPDATE SET
-                        embedding = EXCLUDED.embedding,
-                        model = EXCLUDED.model,
-                        content_hash = EXCLUDED.content_hash,
-                        created_at = NOW()
-                    """,
-                    (uid, folder, embedding, model, content_hash),
-                )
-                conn.commit()
+        return emb_q.upsert_embedding(self, uid, folder, embedding, model, content_hash)
 
     def get_user_preferences(self, user_id: str) -> dict[str, Any]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT prefs_json FROM user_preferences WHERE user_id = %s",
-                    (user_id,),
-                )
-                row = cur.fetchone()
-                if not row:
-                    return {}
-                try:
-                    return json.loads(row[0]) if row[0] else {}
-                except Exception:
-                    return {}
+        return pref_q.get_user_preferences(self, user_id)
 
     def upsert_user_preferences(self, user_id: str, prefs: dict[str, Any]) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO user_preferences (user_id, prefs_json, updated_at)
-                    VALUES (%s, %s, NOW())
-                    ON CONFLICT(user_id) DO UPDATE SET
-                        prefs_json = EXCLUDED.prefs_json,
-                        updated_at = NOW()
-                    """,
-                    (user_id, json.dumps(prefs)),
-                )
-                conn.commit()
+        return pref_q.upsert_user_preferences(self, user_id, prefs)
 
     def ensure_calendar_schema(self) -> None:
         with self.connection() as conn:
@@ -928,55 +681,23 @@ class PostgresDatabase(DatabaseInterface):
         last_full_sync_at: Optional[str] = None,
         last_incremental_sync_at: Optional[str] = None,
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO calendar_sync_state (
-                        calendar_id, sync_token, window_start, window_end,
-                        last_full_sync_at, last_incremental_sync_at, status, last_error
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT(calendar_id) DO UPDATE SET
-                        sync_token = EXCLUDED.sync_token,
-                        window_start = EXCLUDED.window_start,
-                        window_end = EXCLUDED.window_end,
-                        last_full_sync_at = COALESCE(EXCLUDED.last_full_sync_at, calendar_sync_state.last_full_sync_at),
-                        last_incremental_sync_at = COALESCE(EXCLUDED.last_incremental_sync_at, calendar_sync_state.last_incremental_sync_at),
-                        status = EXCLUDED.status,
-                        last_error = EXCLUDED.last_error
-                    """,
-                    (
-                        calendar_id,
-                        sync_token,
-                        window_start,
-                        window_end,
-                        last_full_sync_at,
-                        last_incremental_sync_at,
-                        status,
-                        last_error,
-                    ),
-                )
-                conn.commit()
+        return cal_q.upsert_calendar_sync_state(
+            self,
+            calendar_id,
+            window_start,
+            window_end,
+            sync_token,
+            status,
+            last_error,
+            last_full_sync_at,
+            last_incremental_sync_at,
+        )
 
     def get_calendar_sync_state(self, calendar_id: str) -> Optional[dict[str, Any]]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT * FROM calendar_sync_state WHERE calendar_id = %s",
-                    (calendar_id,),
-                )
-                row = cur.fetchone()
-                if row:
-                    columns = [desc[0] for desc in cur.description]
-                    return dict(zip(columns, row))
-                return None
+        return cal_q.get_calendar_sync_state(self, calendar_id)
 
     def list_calendar_sync_states(self) -> list[dict[str, Any]]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT * FROM calendar_sync_state")
-                columns = [desc[0] for desc in cur.description]
-                return [dict(zip(columns, row)) for row in cur.fetchall()]
+        return cal_q.list_calendar_sync_states(self)
 
     def upsert_calendar_event_cache(
         self,
@@ -995,56 +716,26 @@ class PostgresDatabase(DatabaseInterface):
         location: Optional[str] = None,
         local_status: str = "synced",
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO calendar_events_cache (
-                        calendar_id, event_id, etag, updated, status,
-                        start_ts_utc, end_ts_utc, start_date, end_date, is_all_day,
-                        summary, location, local_status, raw_json
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT(calendar_id, event_id) DO UPDATE SET
-                        etag = EXCLUDED.etag,
-                        updated = EXCLUDED.updated,
-                        status = EXCLUDED.status,
-                        start_ts_utc = EXCLUDED.start_ts_utc,
-                        end_ts_utc = EXCLUDED.end_ts_utc,
-                        start_date = EXCLUDED.start_date,
-                        end_date = EXCLUDED.end_date,
-                        is_all_day = EXCLUDED.is_all_day,
-                        summary = EXCLUDED.summary,
-                        location = EXCLUDED.location,
-                        local_status = EXCLUDED.local_status,
-                        raw_json = EXCLUDED.raw_json
-                    """,
-                    (
-                        calendar_id,
-                        event_id,
-                        etag,
-                        updated,
-                        status,
-                        start_ts_utc,
-                        end_ts_utc,
-                        start_date,
-                        end_date,
-                        is_all_day,
-                        summary,
-                        location,
-                        local_status,
-                        json.dumps(raw_json),
-                    ),
-                )
-                conn.commit()
+        return cal_q.upsert_calendar_event_cache(
+            self,
+            calendar_id,
+            event_id,
+            raw_json,
+            etag,
+            updated,
+            status,
+            start_ts_utc,
+            end_ts_utc,
+            start_date,
+            end_date,
+            is_all_day,
+            summary,
+            location,
+            local_status,
+        )
 
     def delete_calendar_event_cache(self, calendar_id: str, event_id: str) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "DELETE FROM calendar_events_cache WHERE calendar_id = %s AND event_id = %s",
-                    (calendar_id, event_id),
-                )
-                conn.commit()
+        return cal_q.delete_calendar_event_cache(self, calendar_id, event_id)
 
     def query_calendar_events_cached(
         self,
@@ -1052,38 +743,9 @@ class PostgresDatabase(DatabaseInterface):
         time_min: str,
         time_max: str,
     ) -> list[dict[str, Any]]:
-        if not calendar_ids:
-            return []
-
-        query = """
-            SELECT raw_json, local_status
-            FROM calendar_events_cache
-            WHERE calendar_id = ANY(%s)
-              AND (
-                (is_all_day = FALSE AND start_ts_utc < %s AND end_ts_utc > %s)
-                OR
-                (is_all_day = TRUE AND start_date < %s::date AND end_date > %s::date)
-              )
-            ORDER BY COALESCE(start_ts_utc, start_date::timestamp) ASC
-        """
-
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    query,
-                    (calendar_ids, time_max, time_min, time_max, time_min),
-                )
-                results: list[dict[str, Any]] = []
-                for row in cur.fetchall():
-                    evt = row[0]
-                    if isinstance(evt, str):
-                        try:
-                            evt = json.loads(evt)
-                        except:
-                            continue
-                    evt["_local_status"] = row[1]
-                    results.append(evt)
-                return results
+        return cal_q.query_calendar_events_cached(
+            self, calendar_ids, time_min, time_max
+        )
 
     def enqueue_calendar_outbox(
         self,
@@ -1093,47 +755,14 @@ class PostgresDatabase(DatabaseInterface):
         event_id: Optional[str] = None,
         local_temp_id: Optional[str] = None,
     ) -> str:
-        outbox_id = str(uuid.uuid4())
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO calendar_outbox (id, op_type, calendar_id, event_id, local_temp_id, payload_json)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        outbox_id,
-                        op_type,
-                        calendar_id,
-                        event_id,
-                        local_temp_id,
-                        json.dumps(payload_json),
-                    ),
-                )
-                conn.commit()
-        return outbox_id
+        return cal_q.enqueue_calendar_outbox(
+            self, op_type, calendar_id, payload_json, event_id, local_temp_id
+        )
 
     def list_calendar_outbox(
         self, statuses: Optional[list[str]] = None
     ) -> list[dict[str, Any]]:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                if statuses:
-                    cur.execute(
-                        "SELECT * FROM calendar_outbox WHERE status = ANY(%s) ORDER BY created_at",
-                        (statuses,),
-                    )
-                else:
-                    cur.execute("SELECT * FROM calendar_outbox ORDER BY created_at")
-                columns = [desc[0] for desc in cur.description]
-                rows = [dict(zip(columns, row)) for row in cur.fetchall()]
-                for r in rows:
-                    if isinstance(r.get("payload_json"), str):
-                        try:
-                            r["payload_json"] = json.loads(r["payload_json"])
-                        except:
-                            r["payload_json"] = {}
-                return rows
+        return cal_q.list_calendar_outbox(self, statuses)
 
     def update_calendar_outbox_status(
         self,
@@ -1142,19 +771,9 @@ class PostgresDatabase(DatabaseInterface):
         error: Optional[str] = None,
         event_id: Optional[str] = None,
     ) -> None:
-        with self.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    UPDATE calendar_outbox
-                    SET status = %s, error = %s, event_id = COALESCE(%s, event_id),
-                        attempt_count = attempt_count + 1,
-                        last_attempt_at = NOW()
-                    WHERE id = %s
-                    """,
-                    (status, error, event_id, outbox_id),
-                )
-                conn.commit()
+        return cal_q.update_calendar_outbox_status(
+            self, outbox_id, status, error, event_id
+        )
 
 
 def create_database(config: Any) -> DatabaseInterface:
