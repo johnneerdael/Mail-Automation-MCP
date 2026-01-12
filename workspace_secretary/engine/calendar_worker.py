@@ -46,6 +46,76 @@ class CalendarWorker:
             )
             sys.exit(0)
 
+        # Load OAuth2 tokens from config/token.json if available (same logic as engine)
+        if not self.config.imap.oauth2:
+            import json
+            from pathlib import Path
+
+            token_path = Path("config/token.json")
+            if token_path.exists():
+                try:
+                    with open(token_path) as f:
+                        oauth2_data = json.load(f)
+
+                    # Merge into config using the config.py OAuth2Config
+                    from workspace_secretary.config import OAuth2Config as ConfigOAuth2
+
+                    self.config.imap.oauth2 = ConfigOAuth2(
+                        client_id=oauth2_data.get(
+                            "client_id",
+                            self.config.imap.oauth2.client_id
+                            if self.config.imap.oauth2
+                            else "",
+                        ),
+                        client_secret=oauth2_data.get(
+                            "client_secret",
+                            self.config.imap.oauth2.client_secret
+                            if self.config.imap.oauth2
+                            else "",
+                        ),
+                        refresh_token=oauth2_data.get("refresh_token"),
+                        access_token=oauth2_data.get("access_token"),
+                        token_expiry=oauth2_data.get("token_expiry"),
+                    )
+                    logger.info(f"Loaded OAuth2 tokens from {token_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load token file {token_path}: {e}")
+
+        # Load OAuth2 tokens from config/token.json if available (same logic as engine)
+        if not self.config.imap.oauth2:
+            import json
+            from pathlib import Path
+
+            token_path = Path("config/token.json")
+            if token_path.exists():
+                try:
+                    with open(token_path) as f:
+                        oauth2_data = json.load(f)
+
+                    # Merge into config using the config.py OAuth2Config
+                    from workspace_secretary.config import OAuth2Config as ConfigOAuth2
+
+                    self.config.imap.oauth2 = ConfigOAuth2(
+                        client_id=oauth2_data.get(
+                            "client_id",
+                            self.config.imap.oauth2.client_id
+                            if self.config.imap.oauth2
+                            else "",
+                        ),
+                        client_secret=oauth2_data.get(
+                            "client_secret",
+                            self.config.imap.oauth2.client_secret
+                            if self.config.imap.oauth2
+                            else "",
+                        ),
+                        refresh_token=oauth2_data.get("refresh_token"),
+                        access_token=oauth2_data.get("access_token"),
+                        token_expiry=oauth2_data.get("token_expiry"),
+                    )
+                    logger.info(f"Loaded OAuth2 tokens from {token_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load token file {token_path}: {e}")
+
         if not self.config.imap.oauth2:
             logger.warning(
                 "OAuth2 not configured - calendar worker will exit gracefully"

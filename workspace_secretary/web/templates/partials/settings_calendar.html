@@ -34,43 +34,51 @@
 </form>
 
 <script>
-document.getElementById('calendar-selection-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+(function() {
+    const form = document.getElementById('calendar-selection-form');
+    if (!form) {
+        console.warn('Calendar selection form not found');
+        return;
+    }
     
-    const formData = new FormData(e.target);
-    const selectedIds = formData.getAll('calendar_ids');
-    
-    try {
-        const response = await fetch('/api/settings/calendar', {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                selected_calendar_ids: selectedIds.length > 0 ? selectedIds : ['primary']
-            })
-        });
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
         
-        if (response.ok) {
-            const button = e.target.querySelector('button[type="submit"]');
-            const originalText = button.textContent;
-            button.textContent = '✓ Saved';
-            button.classList.add('bg-green-600');
-            button.classList.remove('bg-blue-600');
+        const formData = new FormData(e.target);
+        const selectedIds = formData.getAll('calendar_ids');
+        
+        try {
+            const response = await fetch('/api/settings/calendar', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    selected_calendar_ids: selectedIds.length > 0 ? selectedIds : ['primary']
+                })
+            });
             
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.classList.remove('bg-green-600');
-                button.classList.add('bg-blue-600');
-            }, 2000);
-        } else {
+            if (response.ok) {
+                const button = e.target.querySelector('button[type="submit"]');
+                const originalText = button.textContent;
+                button.textContent = '✓ Saved';
+                button.classList.add('bg-green-600');
+                button.classList.remove('bg-blue-600');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-green-600');
+                    button.classList.add('bg-blue-600');
+                }, 2000);
+            } else {
+                alert('Failed to save calendar selection');
+            }
+        } catch (error) {
+            console.error('Error saving calendar selection:', error);
             alert('Failed to save calendar selection');
         }
-    } catch (error) {
-        console.error('Error saving calendar selection:', error);
-        alert('Failed to save calendar selection');
-    }
-});
+    });
+})();
 </script>
 
 {% else %}
