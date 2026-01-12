@@ -782,8 +782,8 @@ def create_database(config: Any) -> DatabaseInterface:
         raise ValueError("PostgreSQL config is required (database.postgres)")
 
     embedding_dimensions = 1536
-    if hasattr(config.database, "embeddings") and config.database.embeddings:
-        embedding_dimensions = getattr(config.database.embeddings, "dimensions", 1536)
+    if hasattr(config, "embeddings") and config.embeddings:
+        embedding_dimensions = getattr(config.embeddings, "dimensions", 1536)
 
     return PostgresDatabase(
         host=postgres_config.host,
