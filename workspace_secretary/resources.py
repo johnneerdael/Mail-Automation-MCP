@@ -7,7 +7,7 @@ from typing import Any, Optional
 from mcp.server.fastmcp import FastMCP, Context
 
 from workspace_secretary.config import ServerConfig
-from workspace_secretary.engine.database import DatabaseInterface
+from workspace_secretary.db import DatabaseInterface
 
 logger = logging.getLogger(__name__)
 

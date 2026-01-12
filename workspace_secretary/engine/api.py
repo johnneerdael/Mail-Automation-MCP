@@ -26,7 +26,8 @@ import io
 from workspace_secretary.config import load_config, ServerConfig, ImapConfig
 from workspace_secretary.engine.imap_sync import ImapClient
 from workspace_secretary.engine.calendar_sync import CalendarClient
-from workspace_secretary.engine.database import DatabaseInterface, create_database
+from workspace_secretary.db import DatabaseInterface
+from workspace_secretary.engine.database import create_database
 from workspace_secretary.engine.analysis import PhishingAnalyzer
 
 if TYPE_CHECKING:

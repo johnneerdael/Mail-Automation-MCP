@@ -5,7 +5,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from workspace_secretary.engine.database import create_database, DatabaseInterface
+from workspace_secretary.db import DatabaseInterface
+from workspace_secretary.engine.database import create_database
 from workspace_secretary.engine.calendar_sync import CalendarClient
 from workspace_secretary.config import load_config
 

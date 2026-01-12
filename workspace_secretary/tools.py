@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from mcp.server.fastmcp import FastMCP, Context
 
 from workspace_secretary.config import ServerConfig
-from workspace_secretary.engine.database import DatabaseInterface
+from workspace_secretary.db import DatabaseInterface
 from workspace_secretary.engine_client import EngineClient
 from workspace_secretary.engine.analysis import PhishingAnalyzer
 
