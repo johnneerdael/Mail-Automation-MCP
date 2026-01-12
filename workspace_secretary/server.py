@@ -8,7 +8,8 @@ from typing import AsyncIterator, Dict, Optional, cast
 
 from mcp.server.fastmcp import FastMCP
 from workspace_secretary.config import ServerConfig, load_config
-from workspace_secretary.engine.database import DatabaseInterface, create_database
+from workspace_secretary.db import DatabaseInterface
+from workspace_secretary.engine.database import create_database
 from workspace_secretary.engine_client import EngineClient, get_engine_client
 
 logging.basicConfig(

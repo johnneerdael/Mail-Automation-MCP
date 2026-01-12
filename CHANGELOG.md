@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.7.1] - 2026-01-12
+
+### Fixed
+- **Critical bug fix**: `create_database()` now correctly reads embedding dimensions from `config.database.embeddings.dimensions` instead of wrong config path
+  - Fixes calendar worker crash: `psycopg.errors.DataException: expected 1536 dimensions, not 3072`
+  - Users with 3072-dim embeddings configured can now run engine without dimension mismatch errors
+
+### Added - Shared Database Layer
+- **New `workspace_secretary/db/` module**: Unified database layer for engine and web
+  - `db/types.py`: Shared `DatabaseInterface` and `DatabaseConnection` protocols
+  - `db/schema.py`: Idempotent DDL functions (CREATE TABLE IF NOT EXISTS, indexes)
+  - `db/postgres.py`: Base `PostgresDatabase` class with connection pooling and schema initialization
+  - `db/__init__.py`: Clean package exports
+
+### Changed
+- **Engine database** (`workspace_secretary/engine/database.py`):
+  - Now imports `DatabaseInterface` from shared `workspace_secretary.db.types`
+  - Self-healing embeddings logic remains engine-specific
+  - CRUD methods remain in place (future extraction planned)
+- **Web database** (`workspace_secretary/web/database.py`):
+  - Replaced custom connection pool with shared `PostgresDatabase` class
+  - Maintains separate pool instance from engine for isolation
+  - All query functions preserved (future extraction to `db/queries/` planned)
+- **Import updates**: 5 files updated to use shared `DatabaseInterface`:
+  - `server.py`, `tools.py`, `resources.py`
+  - `engine/calendar_worker.py`, `engine/api.py`
+
+### Architecture
+- **Separate pools**: Engine and web each maintain own `PostgresDatabase` instance
+- **Idempotent schema**: Web calls safe schema init functions, engine adds self-heal
+- **Gradual refactoring**: CRUD methods stay in current locations for backward compatibility
+
 ## [4.7.0] - 2026-01-12
 
 ### Changed - PostgreSQL-Only Architecture

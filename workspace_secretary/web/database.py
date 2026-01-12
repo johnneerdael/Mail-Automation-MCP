@@ -1,22 +1,23 @@
 """
-Direct PostgreSQL connection for web UI - read-only access.
+Web UI database access layer - read-only queries using shared PostgresDatabase.
 """
 
 from typing import Optional
 from contextlib import contextmanager
 import logging
-import psycopg_pool
 from psycopg.rows import dict_row
+
+from workspace_secretary.db import PostgresDatabase
 
 logger = logging.getLogger(__name__)
 
-_pool = None
-_vector_type = None  # Cached vector type (vector or halfvec)
+_db: Optional[PostgresDatabase] = None
 
 
-def get_pool():
-    global _pool
-    if _pool is None:
+def get_db() -> PostgresDatabase:
+    """Get or create singleton PostgresDatabase instance for web UI."""
+    global _db
+    if _db is None:
         from workspace_secretary.config import load_config
 
         config = load_config()
@@ -24,37 +25,38 @@ def get_pool():
             logger.error("PostgreSQL configuration is missing from config.yaml")
             raise RuntimeError("PostgreSQL configuration is missing")
 
-        db = config.database.postgres
+        db_config = config.database.postgres
+        embedding_dimensions = 1536
+        if hasattr(config.database, "embeddings") and config.database.embeddings:
+            embedding_dimensions = getattr(
+                config.database.embeddings, "dimensions", 1536
+            )
 
-        conninfo = f"host={db.host} port={db.port} dbname={db.database} user={db.user} password={db.password}"
-        _pool = psycopg_pool.ConnectionPool(conninfo, min_size=1, max_size=5)
-        logger.info("Web UI database pool initialized")
-    return _pool
+        _db = PostgresDatabase(
+            host=db_config.host,
+            port=db_config.port,
+            database=db_config.database,
+            user=db_config.user,
+            password=db_config.password,
+            ssl_mode=getattr(db_config, "ssl_mode", "prefer"),
+            embedding_dimensions=embedding_dimensions,
+        )
+        _db.initialize()
+        logger.info("Web UI database initialized")
+    return _db
 
 
 def get_vector_type() -> str:
-    """Get the vector type based on embedding dimensions config.
-
-    Returns 'halfvec' for dimensions > 2000 (HNSW index limit), otherwise 'vector'.
-    """
-    global _vector_type
-    if _vector_type is None:
-        from workspace_secretary.config import load_config
-
-        config = load_config()
-        dims = (
-            config.database.embeddings.dimensions
-            if config.database.embeddings
-            else 1536
-        )
-        _vector_type = "halfvec" if dims > 2000 else "vector"
-    return _vector_type
+    """Get the vector type based on embedding dimensions."""
+    db = get_db()
+    return db._vector_type
 
 
 @contextmanager
 def get_conn():
-    pool = get_pool()
-    with pool.connection() as conn:
+    """Get database connection from shared pool."""
+    db = get_db()
+    with db.connection() as conn:
         yield conn
 
 
@@ -468,8 +470,8 @@ def upsert_contact(
     organization: str | None = None,
 ):
     """Create or update a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -497,11 +499,11 @@ def add_contact_interaction(
     direction: str,
     subject: str,
     email_date: str,
-    message_id: str = None,
+    message_id: Optional[str] = None,
 ):
     """Record an interaction with a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -541,12 +543,12 @@ def get_all_contacts(
     """Get all contacts with pagination and search."""
     from psycopg import sql
 
-    pool = get_pool()
+    db = get_db()
     valid_sorts = ["last_email_date", "email_count", "email", "display_name"]
     if sort_by not in valid_sorts:
         sort_by = "last_email_date"
 
-    with pool.connection() as conn:
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             if search:
                 query = sql.SQL("""
@@ -573,8 +575,8 @@ def get_all_contacts(
 
 def get_contact_by_email(email: str):
     """Get contact details by email."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
@@ -589,9 +591,9 @@ def get_contact_by_email(email: str):
 
 
 def get_contact_interactions(contact_id: int, limit: int = 50):
-    """Get recent interactions for a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    """Get recent interactions with a contact."""
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
@@ -608,8 +610,8 @@ def get_contact_interactions(contact_id: int, limit: int = 50):
 
 def get_frequent_contacts(limit: int = 20):
     """Get most frequently contacted people."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
@@ -625,8 +627,8 @@ def get_frequent_contacts(limit: int = 20):
 
 def get_recent_contacts(limit: int = 20):
     """Get recently contacted people."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
@@ -642,9 +644,9 @@ def get_recent_contacts(limit: int = 20):
 
 
 def search_contacts_autocomplete(query: str, limit: int = 10):
-    """Search contacts for autocomplete (email + name)."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    """Search contacts for autocomplete (prefix match on name/email)."""
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
@@ -661,8 +663,8 @@ def search_contacts_autocomplete(query: str, limit: int = 10):
 
 def update_contact_vip_status(contact_id: int, is_vip: bool):
     """Toggle VIP status for a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE contacts SET is_vip = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -673,8 +675,8 @@ def update_contact_vip_status(contact_id: int, is_vip: bool):
 
 def add_contact_note(contact_id: int, note: str):
     """Add a note to a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO contact_notes (contact_id, note) VALUES (%s, %s) RETURNING id",
@@ -687,8 +689,8 @@ def add_contact_note(contact_id: int, note: str):
 
 def get_contact_notes(contact_id: int):
     """Get all notes for a contact."""
-    pool = get_pool()
-    with pool.connection() as conn:
+    db = get_db()
+    with db.connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
