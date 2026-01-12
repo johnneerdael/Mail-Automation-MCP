@@ -125,7 +125,7 @@
                 <a href="/search" class="text-sm text-muted hover:text-body">Clear all filters</a>
                 {% if query %}
                 <button type="button" @click="showSaveModal = true" 
-                        class="text-sm text-primary hover:text-blue-600 dark:hover:text-blue-400 flex items-center gap-1">
+                        class="link text-sm flex items-center gap-1">
                     💾 Save this search
                 </button>
                 {% endif %}
@@ -211,10 +211,10 @@
                             </div>
                             <div class="flex items-center space-x-3">
                                 {% if result.similarity %}
-                                <span class="text-xs px-2 py-0.5 rounded-full 
-                                    {% if result.similarity > 0.85 %}bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200
-                                    {% elif result.similarity > 0.7 %}bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200
-                                    {% else %}bg-surface-subtle text-muted{% endif %}">
+                                <span class="badge
+                                    {% if result.similarity > 0.85 %}badge-success
+                                    {% elif result.similarity > 0.7 %}badge-warning
+                                    {% else %}badge-neutral{% endif %}">
                                     {{ "%.0f"|format(result.similarity * 100) }}% match
                                 </span>
                                 {% endif %}

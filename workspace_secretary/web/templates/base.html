@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Secretary{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/theme.css') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js" defer></script>
@@ -41,70 +42,13 @@
         }
     </script>
     <style type="text/tailwindcss">
-        @layer base {
-            :root {
-                --color-canvas: #f9fafb; /* gray-50 */
-                --color-surface: #ffffff;
-                --color-surface-subtle: #f3f4f6; /* gray-100 */
-                --color-body: #111827; /* gray-900 */
-                --color-muted: #6b7280; /* gray-500 */
-                --color-border: #e5e7eb; /* gray-200 */
-            }
-            .dark {
-                --color-canvas: #030712; /* gray-950 */
-                --color-surface: #111827; /* gray-900 */
-                --color-surface-subtle: #1f2937; /* gray-800 */
-                --color-body: #f3f4f6; /* gray-100 */
-                --color-muted: #9ca3af; /* gray-400 */
-                --color-border: #1f2937; /* gray-800 */
-            }
-        }
-        
-        @layer components {
-            .btn-primary { 
-                @apply px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed;
-            }
-            .btn-secondary { 
-                @apply px-4 py-2 text-sm font-medium text-body bg-surface-subtle border border-border rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500;
-            }
-            .btn-danger {
-                @apply px-4 py-2 text-sm font-medium text-white bg-error rounded-md hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-error;
-            }
-            .btn-icon { 
-                @apply p-2 text-muted hover:text-body rounded-md hover:bg-surface-subtle transition-colors; 
-            }
-            .input-field { 
-                @apply w-full px-3 py-2 bg-surface-subtle border border-border rounded-md text-body placeholder-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow; 
-            }
-            .card { 
-                @apply bg-surface border border-border rounded-lg shadow-sm p-4 sm:p-6; 
-            }
-            .badge { 
-                @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium; 
-            }
-            .badge-success { @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400; }
-            .badge-warning { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400; }
-            .badge-error { @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400; }
-            .badge-neutral { @apply bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300; }
-            .badge-info { @apply bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400; }
-            
-            /* Typography */
-            .h1 { @apply text-2xl font-bold text-body; }
-            .h2 { @apply text-lg font-semibold text-body; }
-            .text-subtle { @apply text-sm text-muted; }
-        }
-
         @layer utilities {
             [x-cloak] { display: none !important; }
-            .email-content img { max-width: 100%; height: auto; }
-            .email-content a { color: #60a5fa; text-decoration: underline; }
-            .search-highlight { background-color: #fbbf24; color: #000; padding: 2px 0; }
-            .search-highlight.current-match { background-color: #f97316; color: #fff; }
         }
     </style>
 
 </head>
-<body class="h-full bg-gray-950 text-gray-100" x-data="{ 
+<body class="h-full" style="background-color: var(--color-canvas); color: var(--color-body);" x-data="{ 
     darkMode: {% if theme == 'system' %}window.matchMedia('(prefers-color-scheme: dark)').matches{% elif theme == 'dark' %}true{% else %}false{% endif %},
     async toggleTheme() {
         this.darkMode = !this.darkMode;
@@ -130,16 +74,15 @@
             console.error('Failed to save theme preference:', e);
         }
     }
-}" x-init="if(!darkMode) document.documentElement.classList.remove('dark'); else document.documentElement.classList.add('dark')" :class="{ 'bg-gray-50 text-gray-900': !darkMode, 'bg-gray-950 text-gray-100': darkMode }">
+}" x-init="if(!darkMode) document.documentElement.classList.remove('dark'); else document.documentElement.classList.add('dark')">
     <div class="min-h-full">
-        <nav class="bg-gray-900 border-b border-gray-800" :class="{ 'bg-white border-gray-200': !darkMode, 'bg-gray-900 border-gray-800': darkMode }" x-data="{ mobileMenuOpen: false }">
+        <nav style="background-color: var(--color-surface); border-bottom: 1px solid var(--color-border);" x-data="{ mobileMenuOpen: false }">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16">
                     <div class="flex">
                         <div class="flex items-center sm:hidden mr-2">
                             <button @click="mobileMenuOpen = !mobileMenuOpen" type="button" 
-                                    class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
-                                    :class="{ 'hover:bg-gray-100': !darkMode, 'hover:bg-gray-800 hover:text-white': darkMode }">
+                                    class="btn-icon">
                                 <span class="sr-only">Open main menu</span>
                                 <svg x-show="!mobileMenuOpen" class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -155,47 +98,47 @@
                             </a>
                         </div>
                         <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                            <a href="/inbox" class="border-primary inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <a href="/inbox" class="nav-link active border-b-2" style="border-color: var(--color-primary);">
                                 Inbox
                             </a>
-                            <a href="/calendar" class="border-transparent text-gray-400 hover:text-gray-200 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" :class="{ 'text-gray-500 hover:text-gray-700': !darkMode, 'text-gray-400 hover:text-gray-200': darkMode }">
+                            <a href="/calendar" class="nav-link border-b-2 border-transparent">
                                 Calendar
                             </a>
-                            <a href="/contacts" class="border-transparent text-gray-400 hover:text-gray-200 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" :class="{ 'text-gray-500 hover:text-gray-700': !darkMode, 'text-gray-400 hover:text-gray-200': darkMode }">
+                            <a href="/contacts" class="nav-link border-b-2 border-transparent">
                                 Contacts
                             </a>
-                            <a href="/chat" class="border-transparent text-gray-400 hover:text-gray-200 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" :class="{ 'text-gray-500 hover:text-gray-700': !darkMode, 'text-gray-400 hover:text-gray-200': darkMode }">
+                            <a href="/chat" class="nav-link border-b-2 border-transparent">
                                 🤖 Assistant
                             </a>
-                            <a href="/search" class="border-transparent text-gray-400 hover:text-gray-200 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" :class="{ 'text-gray-500 hover:text-gray-700': !darkMode, 'text-gray-400 hover:text-gray-200': darkMode }">
+                            <a href="/search" class="nav-link border-b-2 border-transparent">
                                 Search
                             </a>
-                            <a href="/settings" class="border-transparent text-gray-400 hover:text-gray-200 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" :class="{ 'text-gray-500 hover:text-gray-700': !darkMode, 'text-gray-400 hover:text-gray-200': darkMode }">
+                            <a href="/settings" class="nav-link border-b-2 border-transparent">
                                 ⚙️ Settings
                             </a>
                         </div>
                     </div>
                     <div class="flex items-center space-x-4">
                         <div x-data="notificationBell()" x-init="init()">
-                            <button @click="togglePanel()" class="relative p-2 rounded-md text-gray-400 hover:bg-gray-800" :class="{ 'hover:bg-gray-100': !darkMode, 'hover:bg-gray-800': darkMode }">
+                            <button @click="togglePanel()" class="btn-icon relative">
                                 <span>🔔</span>
                                 <span x-show="unreadCount > 0" x-cloak 
-                                      class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center"
+                                      style="position: absolute; top: -0.25rem; right: -0.25rem; width: 1.25rem; height: 1.25rem; background-color: var(--color-error); color: white; font-size: 0.75rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"
                                       x-text="unreadCount > 9 ? '9+' : unreadCount"></span>
                             </button>
                             
                             <div x-show="showPanel" x-cloak @click.outside="showPanel = false"
-                                 class="absolute right-4 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
-                                <div class="p-3 border-b border-gray-700 flex items-center justify-between">
-                                    <h3 class="font-medium text-white">Notifications</h3>
+                                 style="position: absolute; right: 1rem; margin-top: 0.5rem; width: 20rem; background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.5rem; box-shadow: var(--shadow-lg); z-index: 50;">
+                                <div style="padding: 0.75rem; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between;">
+                                    <h3 style="font-weight: 500; color: var(--color-body);">Notifications</h3>
                                     <button @click="requestPermission()" x-show="!notificationsEnabled" 
-                                            class="text-xs text-blue-400 hover:text-blue-300">
+                                            style="font-size: 0.75rem; color: var(--color-primary);">
                                         Enable desktop notifications
                                     </button>
                                 </div>
-                                <div class="max-h-96 overflow-y-auto">
+                                <div style="max-height: 24rem; overflow-y: auto;">
                                     <template x-if="notifications.length === 0">
-                                        <div class="p-4 text-center text-gray-500 text-sm">
+                                        <div style="padding: 1rem; text-align: center; color: var(--color-muted); font-size: 0.875rem;">
                                             No new notifications
                                         </div>
                                     </template>
@@ -203,23 +146,27 @@
                                         <div>
                                             <template x-if="n.type === 'email'">
                                                 <a :href="'/thread/' + n.folder + '/' + n.uid"
-                                                   class="block px-4 py-3 hover:bg-gray-700 border-b border-gray-700/50">
-                                                    <div class="flex items-center justify-between mb-1">
-                                                        <span class="text-sm font-medium text-white truncate" x-text="n.from"></span>
-                                                        <span class="text-xs text-gray-500" x-text="formatTime(n.date)"></span>
+                                                   style="display: block; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border);"
+                                                   @mouseenter="$el.style.backgroundColor = 'var(--color-surface-hover)'"
+                                                   @mouseleave="$el.style.backgroundColor = ''">
+                                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.25rem;">
+                                                        <span style="font-size: 0.875rem; font-weight: 500; color: var(--color-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-text="n.from"></span>
+                                                        <span style="font-size: 0.75rem; color: var(--color-muted);" x-text="formatTime(n.date)"></span>
                                                     </div>
-                                                    <p class="text-sm text-gray-400 truncate" x-text="n.subject"></p>
+                                                    <p style="font-size: 0.875rem; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-text="n.subject"></p>
                                                 </a>
                                             </template>
                                             <template x-if="n.type === 'calendar'">
                                                 <a href="/calendar"
-                                                   class="block px-4 py-3 hover:bg-gray-700 border-b border-gray-700/50 bg-purple-900/20">
-                                                    <div class="flex items-start gap-2">
-                                                        <span class="text-lg">📅</span>
-                                                        <div class="flex-1 min-w-0">
-                                                            <p class="text-sm font-medium text-white truncate" x-text="n.summary"></p>
-                                                            <p class="text-xs text-purple-300" x-text="formatTime(n.start)"></p>
-                                                            <p class="text-xs text-gray-500 truncate" x-show="n.location" x-text="n.location"></p>
+                                                   style="display: block; padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-border); background-color: rgba(147, 51, 234, 0.1);"
+                                                   @mouseenter="$el.style.backgroundColor = 'rgba(147, 51, 234, 0.2)'"
+                                                   @mouseleave="$el.style.backgroundColor = 'rgba(147, 51, 234, 0.1)'">
+                                                    <div style="display: flex; align-items: start; gap: 0.5rem;">
+                                                        <span style="font-size: 1.125rem;">📅</span>
+                                                        <div style="flex: 1; min-width: 0;">
+                                                            <p style="font-size: 0.875rem; font-weight: 500; color: var(--color-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-text="n.summary"></p>
+                                                            <p style="font-size: 0.75rem; color: #a78bfa;" x-text="formatTime(n.start)"></p>
+                                                            <p style="font-size: 0.75rem; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-show="n.location" x-text="n.location"></p>
                                                         </div>
                                                     </div>
                                                 </a>
@@ -231,7 +178,7 @@
                         </div>
                         
                         <button @click="toggleTheme()" 
-                                class="p-2 rounded-md text-gray-400 hover:bg-gray-800" :class="{ 'hover:bg-gray-100': !darkMode, 'hover:bg-gray-800': darkMode }">
+                                class="btn-icon">
                             <span x-show="!darkMode">🌙</span>
                             <span x-show="darkMode" x-cloak>☀️</span>
                         </button>
@@ -239,24 +186,24 @@
                 </div>
             </div>
 
-            <div x-show="mobileMenuOpen" x-cloak class="sm:hidden border-t border-gray-700" id="mobile-menu">
+            <div x-show="mobileMenuOpen" x-cloak style="border-top: 1px solid var(--color-border);" id="mobile-menu" class="sm:hidden">
                 <div class="pt-2 pb-3 space-y-1">
-                    <a href="/inbox" class="bg-gray-900 border-primary text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'bg-gray-50 border-primary text-primary': !darkMode, 'bg-gray-800 border-primary text-white': darkMode }">
+                    <a href="/inbox" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid var(--color-primary); font-size: 1rem; font-weight: 500; color: var(--color-primary); background-color: var(--color-primary-subtle);">
                         Inbox
                     </a>
-                    <a href="/calendar" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                    <a href="/calendar" class="nav-link" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid transparent; font-size: 1rem; font-weight: 500;">
                         Calendar
                     </a>
-                    <a href="/contacts" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                    <a href="/contacts" class="nav-link" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid transparent; font-size: 1rem; font-weight: 500;">
                         Contacts
                     </a>
-                    <a href="/chat" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                    <a href="/chat" class="nav-link" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid transparent; font-size: 1rem; font-weight: 500;">
                         🤖 Assistant
                     </a>
-                    <a href="/search" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                    <a href="/search" class="nav-link" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid transparent; font-size: 1rem; font-weight: 500;">
                         Search
                     </a>
-                    <a href="/settings" class="border-transparent text-gray-300 hover:bg-gray-700 hover:text-white block pl-3 pr-4 py-2 border-l-4 text-base font-medium" :class="{ 'text-gray-500 hover:bg-gray-50 hover:text-gray-700': !darkMode, 'text-gray-300 hover:bg-gray-700 hover:text-white': darkMode }">
+                    <a href="/settings" class="nav-link" style="display: block; padding: 0.5rem 1rem; padding-left: 0.75rem; border-left: 4px solid transparent; font-size: 1rem; font-weight: 500;">
                         ⚙️ Settings
                     </a>
                 </div>

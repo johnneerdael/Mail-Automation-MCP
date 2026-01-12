@@ -9,6 +9,7 @@
          showValidation: false,
          validationErrors: [],
          scheduleDateTime: null,
+         quillEditor: null,
          handleDrop(event) {
              this.isDragging = false;
              const files = Array.from(event.dataTransfer.files);
@@ -24,9 +25,48 @@
             isSuspiciousFile(filename) {
                 const suspiciousExts = ['.exe', '.bat', '.cmd', '.com', '.scr', '.vbs', '.js', '.jar', '.dll', '.msi', '.app', '.dmg', '.sh', '.ps1'];
                 return suspiciousExts.some(ext => filename.toLowerCase().endsWith(ext));
+            },
+            initQuill() {
+                const isDark = document.documentElement.classList.contains('dark');
+                this.quillEditor = new Quill('#quill-editor', {
+                    theme: 'snow',
+                    placeholder: 'Write your message...',
+                    modules: {
+                        toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'color': [] }, { 'background': [] }],
+                            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                            [{ 'align': [] }],
+                            ['link', 'image'],
+                            ['clean']
+                        ]
+                    }
+                });
+                
+                const editor = document.querySelector('#quill-editor');
+                const container = editor.closest('.ql-container');
+                const toolbar = document.querySelector('.ql-toolbar');
+                
+                if (isDark) {
+                    container.style.backgroundColor = 'transparent';
+                    container.style.color = 'rgb(229, 231, 235)';
+                    editor.style.color = 'rgb(229, 231, 235)';
+                    if (toolbar) {
+                        toolbar.style.backgroundColor = 'rgb(39, 39, 42)';
+                        toolbar.style.borderColor = 'rgb(63, 63, 70)';
+                    }
+                }
+                
+                this.quillEditor.on('text-change', () => {
+                    const content = this.quillEditor.root.innerHTML;
+                    document.querySelector('input[name=body_html]').value = content;
+                    document.querySelector('textarea[name=body]').value = this.quillEditor.getText();
+                });
             }
      }"
      x-init="
+         $nextTick(() => { initQuill(); });
          autoSaveTimer = setInterval(() => {
              if ({{ 'true' if reply_to_uid else 'false' }}) {
                  const form = $el.querySelector('form');
@@ -42,9 +82,73 @@
      "
      x-effect="() => { if ($el.dataset.cleanup !== 'done') { return () => { clearInterval(autoSaveTimer); $el.dataset.cleanup = 'done'; }; } }"
      @keydown.escape.window="$el.remove()">
-    <div class="bg-surface rounded-xl shadow-2xl border border-border w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div class="flex items-center justify-between px-6 py-4 border-b border-border bg-surface rounded-t-xl">
-            <h2 class="h2">
+    
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"></script>
+    
+    <style>
+        .ql-toolbar.ql-snow {
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            background-color: var(--color-surface);
+            border-color: var(--color-border);
+        }
+        
+        .ql-container.ql-snow {
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            border-color: var(--color-border);
+            background-color: transparent;
+            font-family: inherit;
+            font-size: 0.875rem;
+        }
+        
+        .ql-editor {
+            min-height: 300px;
+            color: var(--color-body);
+        }
+        
+        .ql-editor.ql-blank::before {
+            color: var(--color-muted);
+            font-style: normal;
+        }
+        
+        .dark .ql-snow .ql-stroke {
+            stroke: rgb(161, 161, 170);
+        }
+        
+        .dark .ql-snow .ql-fill {
+            fill: rgb(161, 161, 170);
+        }
+        
+        .dark .ql-snow .ql-picker-label {
+            color: rgb(161, 161, 170);
+        }
+        
+        .dark .ql-snow .ql-picker-options {
+            background-color: rgb(39, 39, 42);
+            border-color: rgb(63, 63, 70);
+        }
+        
+        .dark .ql-toolbar button:hover,
+        .dark .ql-toolbar button.ql-active {
+            color: rgb(229, 231, 235);
+        }
+        
+        .dark .ql-toolbar button:hover .ql-stroke,
+        .dark .ql-toolbar button.ql-active .ql-stroke {
+            stroke: rgb(229, 231, 235);
+        }
+        
+        .dark .ql-toolbar button:hover .ql-fill,
+        .dark .ql-toolbar button.ql-active .ql-fill {
+            fill: rgb(229, 231, 235);
+        }
+    </style>
+    
+    <div class="bg-surface rounded-xl shadow-2xl border border-border w-full max-w-4xl max-h-[90vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 class="text-xl font-semibold text-body">
                 {% if mode == 'new' %}New Message
                 {% elif mode == 'reply' %}Reply
                 {% elif mode == 'reply_all' %}Reply All
@@ -52,8 +156,10 @@
                 {% endif %}
             </h2>
             <button @click="$el.closest('.fixed').remove()" 
-                    class="text-muted hover:text-body p-1 rounded-md hover:bg-surface-subtle">
-                ✕
+                    class="text-muted hover:text-body p-2 rounded-lg hover:bg-surface-subtle transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
             </button>
         </div>
         
@@ -66,17 +172,19 @@
             {% if original_message_id %}
             <input type="hidden" name="reply_to_message_id" value="{{ original_message_id }}">
             {% endif %}
+            <input type="hidden" name="body_html">
             
-            <div class="px-6 py-2 space-y-2 border-b border-border">
-                <div class="flex items-center py-1">
-                    <label class="w-20 text-sm font-medium text-muted">From:</label>
+            <div class="px-6 py-4 space-y-3 border-b border-border bg-surface-subtle/50">
+                <div class="flex items-center gap-3">
+                    <label class="w-16 text-sm font-medium text-muted flex-shrink-0">From</label>
                     <select name="from_alias" 
-                            class="flex-1 bg-transparent text-body text-sm focus:outline-none py-1">
+                            class="flex-1 bg-surface text-body text-sm rounded-lg border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all">
                         <option value="default">Primary Account</option>
                     </select>
                 </div>
-                <div class="flex items-center relative py-1" x-data="{ suggestions: [], showSuggestions: false }">
-                    <label class="w-20 text-sm font-medium text-muted">To:</label>
+                
+                <div class="flex items-center gap-3 relative" x-data="{ suggestions: [], showSuggestions: false }">
+                    <label class="w-16 text-sm font-medium text-muted flex-shrink-0">To</label>
                     <input type="email" name="to" value="{{ to }}" required
                            @input="
                                if ($event.target.value.length > 2) {
@@ -88,94 +196,96 @@
                                }
                            "
                            @blur="setTimeout(() => showSuggestions = false, 200)"
-                           class="flex-1 bg-transparent text-body text-sm focus:outline-none placeholder-muted/50 py-1"
+                           class="flex-1 bg-surface text-body text-sm rounded-lg border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted/50 transition-all"
                            placeholder="recipient@example.com">
                     <div x-show="showSuggestions && suggestions.length > 0" 
-                         class="absolute top-full left-20 mt-1 bg-surface border border-border rounded shadow-lg z-10 w-64">
+                         x-transition
+                         class="absolute top-full left-20 mt-1 bg-surface border border-border rounded-lg shadow-xl z-20 w-80 max-h-48 overflow-auto">
                         <template x-for="contact in suggestions" :key="contact">
                             <button type="button" 
                                     @click="$el.closest('.relative').querySelector('input').value = contact; showSuggestions = false"
-                                    class="w-full text-left px-3 py-2 text-sm text-body hover:bg-surface-hover"
+                                    class="w-full text-left px-4 py-2 text-sm text-body hover:bg-surface-subtle transition-colors"
                                     x-text="contact"></button>
                         </template>
                     </div>
                 </div>
-                <div class="flex items-center py-1">
-                    <label class="w-20 text-sm font-medium text-muted">Cc:</label>
+                
+                <div class="flex items-center gap-3">
+                    <label class="w-16 text-sm font-medium text-muted flex-shrink-0">Cc</label>
                     <input type="text" name="cc" value="{{ cc }}"
-                           class="flex-1 bg-transparent text-body text-sm focus:outline-none placeholder-muted/50 py-1"
+                           class="flex-1 bg-surface text-body text-sm rounded-lg border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted/50 transition-all"
                            placeholder="cc@example.com">
                 </div>
-                <div class="flex items-center py-1" x-data="{ showBcc: false }">
+                
+                <div class="flex items-center gap-3" x-data="{ showBcc: {{ 'true' if bcc else 'false' }} }">
                     <template x-if="!showBcc">
                         <button type="button" @click="showBcc = true" 
-                                class="text-sm text-muted hover:text-body">
-                            + Bcc
+                                class="text-sm text-primary hover:text-primary/80 font-medium transition-colors ml-20">
+                            + Add Bcc
                         </button>
                     </template>
                     <template x-if="showBcc">
-                        <div class="flex items-center w-full">
-                            <label class="w-20 text-sm font-medium text-muted">Bcc:</label>
+                        <div class="flex items-center gap-3 w-full">
+                            <label class="w-16 text-sm font-medium text-muted flex-shrink-0">Bcc</label>
                             <input type="text" name="bcc" value="{{ bcc }}"
-                                   class="flex-1 bg-transparent text-body text-sm focus:outline-none placeholder-muted/50 py-1"
+                                   class="flex-1 bg-surface text-body text-sm rounded-lg border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted/50 transition-all"
                                    placeholder="bcc@example.com">
                         </div>
                     </template>
                 </div>
-                <div class="flex items-center py-1">
-                    <label class="w-20 text-sm font-medium text-muted">Subject:</label>
+                
+                <div class="flex items-center gap-3">
+                    <label class="w-16 text-sm font-medium text-muted flex-shrink-0">Subject</label>
                     <input type="text" name="subject" value="{{ subject }}" required
-                           class="flex-1 bg-transparent text-body text-sm font-medium focus:outline-none placeholder-muted/50 py-1"
+                           class="flex-1 bg-surface text-body text-sm font-semibold rounded-lg border border-border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted/50 transition-all"
                            placeholder="Subject">
                 </div>
             </div>
             
-            <div class="flex-1 overflow-auto p-6" x-data="{ richText: false }"
+            <div class="flex-1 overflow-auto p-6"
                  @drop.prevent="handleDrop($event)"
                  @dragover.prevent="isDragging = true"
                  @dragleave="isDragging = false">
-                <div class="flex items-center justify-end mb-2">
-                    <button type="button" 
-                            @click="richText = !richText"
-                            class="text-xs text-muted hover:text-body">
-                        <span x-show="!richText">📝 Enable Rich Text</span>
-                        <span x-show="richText">📄 Plain Text</span>
-                    </button>
-                </div>
-                <div x-show="richText" class="mb-2 flex gap-1 border-b border-border pb-2 flex-wrap">
-                    <button type="button" onclick="document.execCommand('bold')" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded" title="Bold">B</button>
-                    <button type="button" onclick="document.execCommand('italic')" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded italic" title="Italic">I</button>
-                    <button type="button" onclick="document.execCommand('underline')" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded underline" title="Underline">U</button>
-                    <button type="button" onclick="document.execCommand('insertUnorderedList')" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded" title="Bullet List">•</button>
-                    <button type="button" onclick="document.execCommand('insertOrderedList')" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded" title="Numbered List">1.</button>
-                    <button type="button" onclick="document.execCommand('createLink', false, prompt('Enter URL:'))" class="px-2 py-1 text-xs bg-surface-subtle hover:bg-surface-hover text-body rounded" title="Link">🔗</button>
-                </div>
-                
-                <div class="relative min-h-[300px]">
-                    <textarea name="body" x-show="!richText"
-                              class="w-full h-full min-h-[300px] bg-transparent text-body text-sm focus:outline-none resize-none placeholder-muted/50"
-                              :class="{'ring-2 ring-primary rounded': isDragging}"
-                              placeholder="Write your message...">{{ body }}</textarea>
-                    <div x-show="richText" 
-                         contenteditable="true"
-                         class="w-full h-full min-h-[300px] bg-transparent text-body text-sm focus:outline-none overflow-auto prose prose-invert max-w-none"
-                         @input="$el.closest('.relative').querySelector('textarea').value = $el.innerHTML">{{ body }}</div>
+                <div class="relative">
+                    <div id="quill-editor"></div>
+                    <textarea name="body" class="hidden">{{ body }}</textarea>
+                    
                     <div x-show="isDragging" 
-                         class="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-md pointer-events-none z-10">
-                        <p class="text-primary font-medium text-lg">Drop files here</p>
+                         x-transition
+                         class="absolute inset-0 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg pointer-events-none z-10">
+                        <div class="text-center">
+                            <svg class="w-12 h-12 text-primary mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            </svg>
+                            <p class="text-primary font-medium text-lg">Drop files here</p>
+                        </div>
                     </div>
                 </div>
                 
-                <div x-show="attachments.length > 0" class="mt-4 space-y-2">
-                    <p class="text-xs font-medium text-muted">Attachments:</p>
+                <div x-show="attachments.length > 0" x-transition class="mt-6 space-y-2">
+                    <p class="text-xs font-semibold text-muted uppercase tracking-wide">Attachments</p>
                     <template x-for="(file, index) in attachments" :key="index">
-                        <div class="flex items-center justify-between p-2 rounded-md border"
-                             :class="isSuspiciousFile(file.name) ? 'bg-red-900/30 border-red-700' : 'bg-surface-subtle border-border'">
-                            <div class="flex items-center gap-2 min-w-0 flex-1">
-                                <span x-show="isSuspiciousFile(file.name)" class="text-red-400 text-lg" title="Warning: Potentially dangerous file type">⚠️</span>
-                                <span x-show="!isSuspiciousFile(file.name)" class="text-muted text-lg">📎</span>
-                                <div class="min-w-0">
-                                    <p class="text-sm truncate" 
+                        <div class="flex items-center justify-between p-3 rounded-lg border transition-all"
+                             :class="isSuspiciousFile(file.name) ? 'bg-red-900/20 border-red-700/50 hover:bg-red-900/30' : 'bg-surface-subtle border-border hover:bg-surface-subtle/80'">
+                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                <div class="flex-shrink-0">
+                                    <template x-if="isSuspiciousFile(file.name)">
+                                        <div class="w-10 h-10 rounded-lg bg-red-900/30 flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                            </svg>
+                                        </div>
+                                    </template>
+                                    <template x-if="!isSuspiciousFile(file.name)">
+                                        <div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                            </svg>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <p class="text-sm font-medium truncate" 
                                        :class="isSuspiciousFile(file.name) ? 'text-red-300' : 'text-body'" 
                                        x-text="file.name"></p>
                                     <p class="text-xs text-muted" x-text="formatFileSize(file.size)"></p>
@@ -183,48 +293,57 @@
                             </div>
                             <button type="button" 
                                     @click="attachments.splice(index, 1)"
-                                    class="text-muted hover:text-red-500 ml-2"
+                                    class="flex-shrink-0 p-2 text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors ml-2"
                                     title="Remove attachment">
-                                <span class="text-xl">×</span>
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
                             </button>
                         </div>
                     </template>
                 </div>
             </div>
             
-            <div class="flex items-center justify-between px-6 py-4 border-t border-border bg-surface rounded-b-xl">
-                <div class="flex items-center space-x-2">
+            <div class="flex items-center justify-between px-6 py-4 border-t border-border bg-surface-subtle/50">
+                <div class="flex items-center gap-2">
                     <button type="button" 
                             @click="$refs.fileInput.click()"
-                            class="btn-icon"
-                            title="Attach file">
-                        📎
+                            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-body bg-surface hover:bg-surface-subtle border border-border rounded-lg transition-colors"
+                            title="Attach files">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                        </svg>
+                        <span x-show="attachments.length === 0">Attach</span>
+                        <span x-show="attachments.length > 0" x-text="attachments.length + ' file(s)'"></span>
                     </button>
                     <input type="file" x-ref="fileInput" multiple class="hidden"
                            @change="attachments = Array.from($event.target.files)">
-                    <span x-show="attachments.length > 0" class="text-xs text-muted" x-text="attachments.length + ' file(s)'"></span>
                     
                     <button type="button" 
                             @click="$refs.scheduleInput.showPicker()"
-                            class="btn-icon"
+                            class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-body bg-surface hover:bg-surface-subtle border border-border rounded-lg transition-colors"
                             title="Schedule send">
-                        ⏰
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span x-show="!scheduleDateTime">Schedule</span>
                     </button>
                     <input type="datetime-local" x-ref="scheduleInput" name="schedule_time" 
-                           class="absolute opacity-0 pointer-events-none"
+                           class="hidden"
                            @change="scheduleDateTime = $event.target.value">
-                    <span x-show="scheduleDateTime" class="text-xs text-muted">
-                        Scheduled <span x-text="new Date(scheduleDateTime).toLocaleString()"></span>
+                    <span x-show="scheduleDateTime" x-transition class="text-xs text-muted bg-surface px-2 py-1 rounded border border-border">
+                        <span x-text="new Date(scheduleDateTime).toLocaleString()"></span>
                     </span>
                     
-                    <span x-show="lastSaved" class="text-xs text-muted ml-2">
+                    <span x-show="lastSaved" x-transition class="text-xs text-muted ml-2">
                         Saved <span x-text="Math.floor((Date.now() - lastSaved) / 1000)"></span>s ago
                     </span>
                 </div>
-                <div class="flex items-center space-x-2">
+                
+                <div class="flex items-center gap-2">
                     <button type="button" 
                             @click="$el.closest('.fixed').remove()"
-                            class="btn-secondary">
+                            class="px-4 py-2 text-sm font-medium text-body bg-surface hover:bg-surface-subtle border border-border rounded-lg transition-colors">
                         Cancel
                     </button>
                     <button type="submit" 
@@ -247,8 +366,15 @@
                                     setTimeout(() => { showValidation = false; validationErrors = []; }, 5000);
                                 } else {
                                     sending = true;
+                                    const csrfToken = document.querySelector('meta[name=\"csrf-token\"]')?.content;
                                     const formData = new FormData(form);
-                                    fetch('/api/email/send', { method: 'POST', body: formData })
+                                    fetch('/api/email/send', { 
+                                        method: 'POST',
+                                        headers: {
+                                            'X-CSRF-Token': csrfToken
+                                        },
+                                        body: formData 
+                                    })
                                         .then(r => r.json())
                                         .then(data => {
                                             if (data.success) {
@@ -263,21 +389,33 @@
                                         });
                                 }
                             "
-                            class="btn-primary flex items-center gap-2">
+                            :class="sending ? 'opacity-50 cursor-not-allowed' : ''"
+                            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg transition-colors">
                         <span x-show="!sending">Send</span>
-                        <span x-show="sending">Sending...</span>
+                        <span x-show="sending" class="inline-flex items-center gap-2">
+                            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Sending...
+                        </span>
                     </button>
                 </div>
             </div>
             
             <div x-show="showValidation" 
                  x-transition
-                 class="absolute top-4 right-4 bg-yellow-900 border border-yellow-700 text-yellow-200 px-4 py-2 rounded-md shadow-lg z-20">
-                <ul class="text-sm">
-                    <template x-for="error in validationErrors">
-                        <li x-text="error"></li>
-                    </template>
-                </ul>
+                 class="absolute top-20 right-6 bg-yellow-900/90 backdrop-blur-sm border border-yellow-700 text-yellow-200 px-4 py-3 rounded-lg shadow-2xl z-20 max-w-sm">
+                <div class="flex items-start gap-3">
+                    <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                    <ul class="text-sm space-y-1">
+                        <template x-for="error in validationErrors">
+                            <li x-text="error"></li>
+                        </template>
+                    </ul>
+                </div>
             </div>
         </form>
     </div>
