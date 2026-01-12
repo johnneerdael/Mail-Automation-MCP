@@ -10,14 +10,31 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from workspace_secretary.config import load_config
+import psycopg_pool
 
 
 def check_contacts_tables():
     print("=== Contacts Page Diagnostic ===\n")
 
     config = load_config("config/config.yaml")
+    db_config = config.database.postgres
+
+    if not db_config:
+        print("✗ PostgreSQL config not found in config.yaml")
+        return
+
     print(
-        f"Database config: {config.database.postgres.database} @ {config.database.postgres.host}:{config.database.postgres.port}\n"
+        f"Database config: {db_config.database} @ {db_config.host}:{db_config.port}\n"
+    )
+
+    pool = psycopg_pool.ConnectionPool(
+        conninfo=f"host={db_config.host} "
+        f"port={db_config.port} "
+        f"dbname={db_config.database} "
+        f"user={db_config.user} "
+        f"password={db_config.password}",
+        min_size=1,
+        max_size=5,
     )
 
     import psycopg_pool
