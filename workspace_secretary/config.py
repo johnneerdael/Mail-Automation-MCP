@@ -308,6 +308,7 @@ class WebApiFormat(Enum):
     OPENAI_CHAT = "openai.chat"
     OPENAI_RESPONSES = "openai.responses"
     ANTHROPIC_CHAT = "anthropic.chat"
+    GEMINI = "gemini"
 
     @classmethod
     def from_string(cls, value: str) -> "WebApiFormat":
@@ -318,9 +319,11 @@ class WebApiFormat(Enum):
             return cls.OPENAI_RESPONSES
         elif normalized in ("anthropic.chat", "anthropic.chat.completions"):
             return cls.ANTHROPIC_CHAT
+        elif normalized in ("gemini", "gemini.genai", "google.genai"):
+            return cls.GEMINI
         else:
             raise ValueError(
-                f"Invalid API format '{value}'. Must be 'openai.chat', 'openai.responses', or 'anthropic.chat'."
+                f"Invalid API format '{value}'. Must be 'openai.chat', 'openai.responses', 'anthropic.chat', or 'gemini'."
             )
 
 

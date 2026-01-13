@@ -1,6 +1,6 @@
 """
 LLM client with MCP tool integration for AI chat functionality.
-Supports OpenAI, Anthropic, and compatible APIs with function calling.
+Supports OpenAI, Anthropic, Gemini, and compatible APIs with function calling.
 """
 
 import json
@@ -12,6 +12,22 @@ from typing import Any, AsyncIterator, Callable, Optional
 import httpx
 
 from workspace_secretary.config import WebAgentConfig, WebApiFormat
+
+# Conditionally import Gemini SDK
+try:
+    from google import genai
+    from google.genai import types as genai_types
+
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+    class _GeminiModulePlaceholder:
+        def Client(self, *args: Any, **kwargs: Any) -> None:
+            raise ImportError("google-genai not installed")
+
+    genai = _GeminiModulePlaceholder()
+    genai_types = None
 
 logger = logging.getLogger(__name__)
 
@@ -76,11 +92,19 @@ class LLMClient:
     def __init__(self, config: Optional[WebAgentConfig] = None):
         self.config = config
         self._client: Optional[httpx.AsyncClient] = None
+        self._gemini_client: Any = None
         self._tools: dict[str, ToolDefinition] = {}
         self._database = None
         self._engine = None
         self._user_email: Optional[str] = None
         self._user_name: Optional[str] = None
+
+        if config and config.api_format == WebApiFormat.GEMINI:
+            if not GEMINI_AVAILABLE:
+                raise ImportError(
+                    "google-genai package not installed. Install with: pip install google-genai"
+                )
+            self._gemini_client = genai.Client(api_key=config.api_key)
 
     def set_context(self, database, engine, user_email: str, user_name: str):
         self._database = database
@@ -540,6 +564,100 @@ Subject: Re: {subject}
                 for t in self._tools.values()
             ]
 
+    def _get_tools_for_gemini(self) -> list[Any]:
+        if not GEMINI_AVAILABLE or genai_types is None:
+            return []
+
+        from google.genai import types as gt
+
+        function_declarations = []
+        for t in self._tools.values():
+            params = t.parameters
+            properties = params.get("properties", {})
+            required = params.get("required", [])
+
+            gemini_properties: dict[str, Any] = {}
+            for prop_name, prop_def in properties.items():
+                prop_type = prop_def.get("type", "string")
+                gemini_type = {
+                    "string": gt.Type.STRING,
+                    "integer": gt.Type.INTEGER,
+                    "number": gt.Type.NUMBER,
+                    "boolean": gt.Type.BOOLEAN,
+                    "array": gt.Type.ARRAY,
+                    "object": gt.Type.OBJECT,
+                }.get(prop_type, gt.Type.STRING)
+
+                gemini_properties[prop_name] = gt.Schema(
+                    type=gemini_type,
+                    description=prop_def.get("description", ""),
+                )
+
+            schema = gt.Schema(
+                type=gt.Type.OBJECT,
+                properties=gemini_properties,
+                required=required if required else None,
+            )
+
+            function_declarations.append(
+                gt.FunctionDeclaration(
+                    name=t.name,
+                    description=t.description,
+                    parameters=schema,
+                )
+            )
+
+        return [gt.Tool(function_declarations=function_declarations)]
+
+    def _build_messages_for_gemini(self, session: ChatSession) -> tuple[str, list[Any]]:
+        if not GEMINI_AVAILABLE or genai_types is None:
+            return "", []
+
+        from google.genai import types as gt
+
+        system_content = SYSTEM_PROMPT.format(
+            current_time=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            user_email=self._user_email or "unknown",
+            user_name=self._user_name or "User",
+        )
+
+        contents: list[Any] = []
+        for msg in session.messages:
+            if msg.role == "user":
+                contents.append(
+                    gt.Content(
+                        role="user",
+                        parts=[gt.Part.from_text(text=msg.content)],
+                    )
+                )
+            elif msg.role == "assistant":
+                parts: list[Any] = []
+                if msg.content:
+                    parts.append(gt.Part.from_text(text=msg.content))
+                if msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        parts.append(
+                            gt.Part.from_function_call(
+                                name=tc["function"]["name"],
+                                args=json.loads(tc["function"]["arguments"]),
+                            )
+                        )
+                contents.append(gt.Content(role="model", parts=parts))
+            elif msg.role == "tool":
+                contents.append(
+                    gt.Content(
+                        role="user",
+                        parts=[
+                            gt.Part.from_function_response(
+                                name=msg.name or "",
+                                response={"result": msg.content},
+                            )
+                        ],
+                    )
+                )
+
+        return system_content, contents
+
     def _build_headers(self) -> dict:
         if not self.config:
             return {}
@@ -670,6 +788,192 @@ Subject: Re: {subject}
             logger.exception(f"Tool {name} failed: {e}")
             return f"Tool error: {e}"
 
+    async def _chat_gemini(self, session: ChatSession) -> str:
+        if not self.config or not self._gemini_client:
+            return "Gemini client not initialized"
+
+        from google.genai import types as gt
+
+        system_content, contents = self._build_messages_for_gemini(session)
+        tools = self._get_tools_for_gemini()
+
+        max_tool_rounds = 5
+        for _ in range(max_tool_rounds):
+            try:
+                config = gt.GenerateContentConfig(
+                    system_instruction=system_content,
+                    temperature=0.7,
+                    max_output_tokens=4096,
+                    tools=tools if tools else None,
+                )
+
+                response = await self._gemini_client.aio.models.generate_content(
+                    model=self.config.model,
+                    contents=contents,
+                    config=config,
+                )
+
+                if not response.candidates:
+                    return "No response generated"
+
+                candidate = response.candidates[0]
+                if not candidate.content or not candidate.content.parts:
+                    return "Empty response"
+
+                text_content = ""
+                tool_calls = []
+
+                for part in candidate.content.parts:
+                    if hasattr(part, "text") and part.text:
+                        text_content += part.text
+                    elif hasattr(part, "function_call") and part.function_call:
+                        fc = part.function_call
+                        tool_call_id = f"call_{fc.name}_{len(tool_calls)}"
+                        tool_calls.append(
+                            {
+                                "id": tool_call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": fc.name,
+                                    "arguments": json.dumps(
+                                        dict(fc.args) if fc.args else {}
+                                    ),
+                                },
+                            }
+                        )
+
+                if tool_calls:
+                    session.add_assistant_message(text_content, tool_calls)
+                    contents.append(
+                        gt.Content(
+                            role="model",
+                            parts=candidate.content.parts,
+                        )
+                    )
+
+                    tool_response_parts = []
+                    for tc in tool_calls:
+                        result = await self._execute_tool(
+                            tc["function"]["name"],
+                            json.loads(tc["function"]["arguments"]),
+                        )
+                        session.add_tool_result(
+                            tc["id"], tc["function"]["name"], result
+                        )
+                        tool_response_parts.append(
+                            gt.Part.from_function_response(
+                                name=tc["function"]["name"],
+                                response={"result": result},
+                            )
+                        )
+
+                    contents.append(gt.Content(role="user", parts=tool_response_parts))
+                    continue
+                else:
+                    session.add_assistant_message(text_content)
+                    return text_content
+
+            except Exception as e:
+                logger.exception(f"Gemini API error: {e}")
+                return f"Error: {e}"
+
+        return "Reached maximum tool execution rounds. Please try a simpler request."
+
+    async def _chat_stream_gemini(self, session: ChatSession) -> AsyncIterator[str]:
+        if not self.config or not self._gemini_client:
+            yield "Gemini client not initialized"
+            return
+
+        from google.genai import types as gt
+
+        system_content, contents = self._build_messages_for_gemini(session)
+        tools = self._get_tools_for_gemini()
+
+        max_tool_rounds = 5
+        for _ in range(max_tool_rounds):
+            try:
+                config = gt.GenerateContentConfig(
+                    system_instruction=system_content,
+                    temperature=0.7,
+                    max_output_tokens=4096,
+                    tools=tools if tools else None,
+                )
+
+                collected_content = ""
+                collected_parts: list[Any] = []
+                tool_calls: list[dict] = []
+
+                async for (
+                    chunk
+                ) in self._gemini_client.aio.models.generate_content_stream(
+                    model=self.config.model,
+                    contents=contents,
+                    config=config,
+                ):
+                    if not chunk.candidates:
+                        continue
+
+                    candidate = chunk.candidates[0]
+                    if not candidate.content or not candidate.content.parts:
+                        continue
+
+                    for part in candidate.content.parts:
+                        collected_parts.append(part)
+                        if hasattr(part, "text") and part.text:
+                            collected_content += part.text
+                            yield part.text
+                        elif hasattr(part, "function_call") and part.function_call:
+                            fc = part.function_call
+                            tool_call_id = f"call_{fc.name}_{len(tool_calls)}"
+                            tool_calls.append(
+                                {
+                                    "id": tool_call_id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": fc.name,
+                                        "arguments": json.dumps(
+                                            dict(fc.args) if fc.args else {}
+                                        ),
+                                    },
+                                }
+                            )
+
+                if tool_calls:
+                    session.add_assistant_message(collected_content, tool_calls)
+                    contents.append(gt.Content(role="model", parts=collected_parts))
+
+                    yield "\n\n🔧 _Using tools..._\n"
+
+                    tool_response_parts = []
+                    for tc in tool_calls:
+                        tool_name = tc["function"]["name"]
+                        yield f"- {tool_name}\n"
+                        result = await self._execute_tool(
+                            tool_name,
+                            json.loads(tc["function"]["arguments"]),
+                        )
+                        session.add_tool_result(tc["id"], tool_name, result)
+                        tool_response_parts.append(
+                            gt.Part.from_function_response(
+                                name=tool_name,
+                                response={"result": result},
+                            )
+                        )
+
+                    contents.append(gt.Content(role="user", parts=tool_response_parts))
+                    yield "\n"
+                    continue
+                else:
+                    session.add_assistant_message(collected_content)
+                    return
+
+            except Exception as e:
+                logger.exception(f"Gemini streaming error: {e}")
+                yield f"\n\nError: {e}"
+                return
+
+        yield "\n\nReached maximum tool execution rounds."
+
     async def chat(self, session: ChatSession, user_message: str) -> str:
         if not self.is_configured:
             return (
@@ -677,6 +981,9 @@ Subject: Re: {subject}
             )
 
         session.add_user_message(user_message)
+
+        if self.config and self.config.api_format == WebApiFormat.GEMINI:
+            return await self._chat_gemini(session)
 
         client = await self._get_client()
         headers = self._build_headers()
@@ -777,6 +1084,11 @@ Subject: Re: {subject}
             return
 
         session.add_user_message(user_message)
+
+        if self.config and self.config.api_format == WebApiFormat.GEMINI:
+            async for chunk in self._chat_stream_gemini(session):
+                yield chunk
+            return
 
         client = await self._get_client()
         headers = self._build_headers()
