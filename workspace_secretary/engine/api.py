@@ -8,7 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 import re
-from email.utils import parseaddr
+from email.message import EmailMessage
+from email.utils import parseaddr, make_msgid
 
 import idna
 from email.mime.multipart import MIMEMultipart
@@ -29,6 +30,7 @@ from workspace_secretary.engine.calendar_sync import CalendarClient
 from workspace_secretary.db import DatabaseInterface
 from workspace_secretary.engine.database import create_database
 from workspace_secretary.engine.analysis import PhishingAnalyzer
+from workspace_secretary.smtp_client import SMTPClient
 
 if TYPE_CHECKING:
     from workspace_secretary.models import Email
@@ -1303,7 +1305,7 @@ async def modify_labels(req: EmailLabelsRequest):
 
 @app.post("/api/email/send")
 async def send_email(req: SendEmailRequest):
-    """Send an email via SMTP/Gmail API."""
+    """Send an email via SMTP."""
     if not state.enrolled:
         return {
             "status": "no_account",
@@ -1313,61 +1315,40 @@ async def send_email(req: SendEmailRequest):
     if not state.config:
         return {"status": "error", "message": "Configuration not loaded"}
 
+    if not state.config.imap.oauth2:
+        return {
+            "status": "error",
+            "message": "OAuth2 configuration required for SMTP sending",
+        }
+
     try:
-        # Build the email message
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = req.subject
-        msg["From"] = state.config.imap.username
-        msg["To"] = ", ".join(req.to)
+        message = EmailMessage()
+        message_id = make_msgid()
+        message["Message-ID"] = message_id
+        message["From"] = state.config.imap.username
+        message["To"] = ", ".join(req.to)
+        message["Subject"] = req.subject
 
         if req.cc:
-            msg["Cc"] = ", ".join(req.cc)
+            message["Cc"] = ", ".join(req.cc)
 
         if req.reply_to_message_id:
-            msg["In-Reply-To"] = req.reply_to_message_id
-            msg["References"] = req.reply_to_message_id
+            message["In-Reply-To"] = req.reply_to_message_id
+            message["References"] = req.reply_to_message_id
 
-        # Add body as plain text
-        msg.attach(MIMEText(req.body, "plain"))
+        message.set_content(req.body or "", subtype="plain")
 
-        # Send via Gmail SMTP with OAuth2
-        if state.config.imap.oauth2 and state.config.imap.oauth2.access_token:
-            import base64
+        if req.bcc:
+            message["Bcc"] = ", ".join(req.bcc)
 
-            # Use Gmail API for sending (more reliable with OAuth)
-            from google.oauth2.credentials import Credentials
-            from googleapiclient.discovery import build
+        smtp_client = SMTPClient(state.config)
+        smtp_client.send_message(message)
 
-            creds = Credentials(
-                token=state.config.imap.oauth2.access_token,
-                refresh_token=state.config.imap.oauth2.refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=state.config.imap.oauth2.client_id,
-                client_secret=state.config.imap.oauth2.client_secret,
-            )
+        if "Bcc" in message:
+            del message["Bcc"]
 
-            service = build("gmail", "v1", credentials=creds)
-
-            # Encode the message
-            raw_message = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
-
-            # Send
-            result = (
-                service.users()
-                .messages()
-                .send(userId="me", body={"raw": raw_message})
-                .execute()
-            )
-
-            await debounced_sync()
-            return {"status": "ok", "message_id": result.get("id")}
-
-        else:
-            # Fallback to SMTP (requires password)
-            return {
-                "status": "error",
-                "message": "OAuth2 required for sending emails",
-            }
+        await debounced_sync()
+        return {"status": "ok", "message_id": message_id}
 
     except Exception as e:
         logger.error(f"Send email error: {e}")
