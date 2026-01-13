@@ -11,6 +11,7 @@ from workspace_secretary.web import (
     get_template_context,
 )
 from workspace_secretary.web.auth import require_auth, Session
+from workspace_secretary.web import database as db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,10 +59,12 @@ async def calendar_view(
 
     engine_error = None
     try:
-        events_response = await engine.get_calendar_events(time_min, time_max)
-        events = events_response.get("events", [])
+        selected_calendar_ids = db.get_selected_calendar_ids(session.user_id)
+        events = db.query_calendar_events(selected_calendar_ids, time_min, time_max)
     except Exception as e:
-        logger.error(f"Failed to fetch calendar events from engine: {e}", exc_info=True)
+        logger.error(
+            f"Failed to fetch calendar events from database: {e}", exc_info=True
+        )
         events = []
         engine_error = f"Calendar service unavailable: {str(e)}"
 

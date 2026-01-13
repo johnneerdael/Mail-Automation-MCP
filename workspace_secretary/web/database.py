@@ -11,6 +11,8 @@ from workspace_secretary.db import PostgresDatabase
 from workspace_secretary.db.queries import emails as email_q
 from workspace_secretary.db.queries import embeddings as emb_q
 from workspace_secretary.db.queries import contacts as contact_q
+from workspace_secretary.db.queries import calendar as calendar_q
+from workspace_secretary.db.queries import preferences as prefs_q
 
 logger = logging.getLogger(__name__)
 
@@ -213,3 +215,41 @@ def add_contact_note(contact_id: int, note: str):
 
 def get_contact_notes(contact_id: int):
     return contact_q.get_contact_notes(get_db(), contact_id)
+
+
+# =============================================================================
+# Calendar Functions (Read-Only)
+# =============================================================================
+
+
+def query_calendar_events(
+    calendar_ids: list[str], time_min: str, time_max: str
+) -> list[dict]:
+    """Query cached calendar events in time range."""
+    return calendar_q.query_calendar_events_cached(
+        get_db(), calendar_ids, time_min, time_max
+    )
+
+
+def get_calendar_sync_state(calendar_id: str) -> Optional[dict]:
+    """Get sync state for a calendar."""
+    return calendar_q.get_calendar_sync_state(get_db(), calendar_id)
+
+
+def get_user_calendar_preferences(user_id: str = "default") -> dict:
+    """Get calendar preferences including selected calendar IDs."""
+    prefs = prefs_q.get_user_preferences(get_db(), user_id)
+    return prefs.get("calendar", {})
+
+
+def get_selected_calendar_ids(user_id: str = "default") -> list[str]:
+    """Get list of calendar IDs selected by user. Defaults to all available if none selected."""
+    calendar_prefs = get_user_calendar_preferences(user_id)
+    selected_ids = calendar_prefs.get("selected_calendar_ids", [])
+
+    # If no calendars selected, default to all calendars that have been synced
+    if not selected_ids:
+        states = calendar_q.list_calendar_sync_states(get_db())
+        selected_ids = [s["calendar_id"] for s in states if s.get("last_full_sync_at")]
+
+    return selected_ids if selected_ids else ["primary"]
