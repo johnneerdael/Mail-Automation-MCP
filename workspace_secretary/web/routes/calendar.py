@@ -60,7 +60,10 @@ async def calendar_view(
     try:
         freebusy_response = await engine.freebusy_query(time_min, time_max)
         busy_slots = (
-            freebusy_response.get("calendars", {}).get("primary", {}).get("busy", [])
+            freebusy_response.get("freebusy", {})
+            .get("calendars", {})
+            .get("primary", {})
+            .get("busy", [])
         )
     except Exception as e:
         busy_slots = []
@@ -218,7 +221,10 @@ async def find_time_slots(
 
         freebusy_response = await engine.freebusy_query(time_min, time_max)
         busy_slots = (
-            freebusy_response.get("calendars", {}).get("primary", {}).get("busy", [])
+            freebusy_response.get("freebusy", {})
+            .get("calendars", {})
+            .get("primary", {})
+            .get("busy", [])
         )
 
         slots = []
@@ -318,7 +324,10 @@ async def availability_widget(
     try:
         freebusy_response = await engine.freebusy_query(time_min, time_max)
         busy_slots = (
-            freebusy_response.get("calendars", {}).get("primary", {}).get("busy", [])
+            freebusy_response.get("freebusy", {})
+            .get("calendars", {})
+            .get("primary", {})
+            .get("busy", [])
         )
     except Exception:
         busy_slots = []
