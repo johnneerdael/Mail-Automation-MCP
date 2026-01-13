@@ -1,20 +1,20 @@
 # Guide
 
-Welcome to **Gmail Secretary MCP** — an AI-native Gmail client exposed as MCP tools, built around safe automation primitives.
+Welcome to **Google MailPilot** — an AI-native Gmail client exposed as MCP tools and a AI Native Browser-Based mail client, built around safe automation primitives.
 
 ::: tip What This Is
-**Secretary MCP is not an IMAP library.** It's a workflow engine for AI assistants that provides:
+**SGoogle MailPilot is not an IMAP library.** It's a workflow engine for AI assistants that provides:
 - **Signals** for intelligent reasoning (VIP detection, deadline mentions, questions)
 - **Staged mutations** with human approval (draft-review-send pattern)
 - **Time-boxed batch operations** that never timeout
 - **Optional semantic search** via pgvector embeddings
 
-The underlying IMAP/SMTP protocols are implementation details—you interact with purpose-built secretary workflows.
+The underlying IMAP/SMTP protocols are implementation details—you interact with purpose-built pilot workflows.
 :::
 
 ## What Makes This Unique
 
-| Traditional Email SDK | Secretary MCP |
+| Traditional Email SDK | Google MailPilot |
 |----------------------|---------------|
 | Returns raw messages | Returns **signals** (`is_from_vip`, `has_question`, `mentions_deadline`) |
 | You handle timeouts | **Time-boxed operations** with continuation states |
@@ -24,7 +24,7 @@ The underlying IMAP/SMTP protocols are implementation details—you interact wit
 
 ## Getting Started
 
-New to Secretary MCP? Start here:
+New to Google MailPilot? Start here:
 
 1. [Installation](/getting-started) - Docker setup with OAuth authentication
 2. [Configuration](./configuration) - Gmail settings, VIP senders, working hours
@@ -139,4 +139,4 @@ See [Configuration](./configuration) for complete reference.
 
 ---
 
-**Questions?** Check [Use Cases](./use-cases) or [open an issue](https://github.com/johnneerdael/gmail-secretary-map/issues).
+**Questions?** Check [Use Cases](./use-cases) or [open an issue](https://github.com/johnneerdael/google-mailpilot/issues).
