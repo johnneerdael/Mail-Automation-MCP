@@ -53,7 +53,6 @@ export default defineConfig({
         {
           text: 'Web Server',
           items: [
-            { text: 'Overview', link: '/webserver/' },
             { text: 'Web UI basics', link: '/webserver/web-ui' },
             { text: 'Mobile support', link: '/webserver/mobile' },
           ]
