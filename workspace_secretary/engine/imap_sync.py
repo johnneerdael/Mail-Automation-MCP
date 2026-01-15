@@ -167,6 +167,9 @@ class ImapClient:
                 "connection aborted",
                 "ssl",
                 "protocol",
+                "logout",  # "illegal in state LOGOUT"
+                "not connected",
+                "broken pipe",
             )
         )
 
