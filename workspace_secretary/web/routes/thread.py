@@ -1,15 +1,33 @@
-from fastapi import APIRouter, Request, HTTPException, Depends, Query
+from fastapi import APIRouter, Request, HTTPException, Depends, Query, BackgroundTasks
 from fastapi.responses import HTMLResponse, StreamingResponse
 from datetime import datetime
 import html
 import re
 import httpx
+import logging
 
 from workspace_secretary.web import database as db, templates, get_template_context
 from workspace_secretary.web.auth import require_auth, Session
 from workspace_secretary.web.engine_client import get_engine_url
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def _mark_read_background(uid: int, folder: str) -> None:
+    """Background task to mark an email as read via the engine API."""
+    try:
+        engine_url = get_engine_url()
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{engine_url}/api/email/mark-read",
+                json={"uid": uid, "folder": folder},
+                timeout=5.0,
+            )
+        logger.debug(f"Auto-marked {folder}/{uid} as read")
+    except Exception as e:
+        # Don't fail the page load if marking read fails
+        logger.debug(f"Auto mark-read failed for {folder}/{uid}: {e}")
 
 
 def format_datetime(date_val) -> str:
@@ -136,6 +154,7 @@ async def thread_view(
     request: Request,
     folder: str,
     uid: int,
+    background_tasks: BackgroundTasks,
     unread_only: bool = Query(False),
     load_images: bool = Query(False),
     session: Session = Depends(require_auth),
@@ -143,6 +162,10 @@ async def thread_view(
     email = db.get_email(uid, folder)
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
+
+    # Auto-mark as read when viewing (runs in background, non-blocking)
+    if email.get("is_unread", False):
+        background_tasks.add_task(_mark_read_background, uid, folder)
 
     labels = email.get("gmail_labels", [])
     if isinstance(labels, str):
