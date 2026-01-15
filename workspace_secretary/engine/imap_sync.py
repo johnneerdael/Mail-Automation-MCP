@@ -3,6 +3,7 @@
 import email
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from email.message import Message
 from typing import Dict, List, Optional, Tuple, Union, Any, cast
@@ -14,6 +15,31 @@ from workspace_secretary.models import Email
 from workspace_secretary.engine.oauth2 import get_access_token
 
 logger = logging.getLogger(__name__)
+
+
+class ModifiedError(Exception):
+    """Raised when STORE fails due to UNCHANGEDSINCE race condition.
+
+    RFC 4551: The server returns MODIFIED when the message's modseq is higher
+    than the UNCHANGEDSINCE value, indicating a concurrent modification.
+    """
+
+    def __init__(self, uid: int, current_modseq: int, message: str = ""):
+        self.uid = uid
+        self.current_modseq = current_modseq
+        super().__init__(
+            message or f"Message {uid} was modified (modseq={current_modseq})"
+        )
+
+
+@dataclass
+class MarkResult:
+    """Result of a mark operation with CONDSTORE support."""
+
+    success: bool
+    modified: bool = False  # True if MODIFIED response received
+    new_modseq: Optional[int] = None  # New modseq after successful operation
+    uids_not_modified: Optional[List[int]] = None  # UIDs that weren't modified (race)
 
 
 class ImapClient:
@@ -174,6 +200,140 @@ class ImapClient:
         except Exception as e:
             logger.warning(f"NOOP heartbeat failed: {e}")
             return False
+
+    def get_message_modseq(self, uid: int, folder: str) -> Optional[int]:
+        """Fetch the current MODSEQ value for a message.
+
+        Args:
+            uid: Email UID
+            folder: Folder containing the email
+
+        Returns:
+            MODSEQ value, or None if CONDSTORE not supported or message not found
+
+        Note:
+            This is useful for obtaining the current modseq before performing
+            a conditional STORE operation with UNCHANGEDSINCE.
+        """
+        if not self.has_condstore_capability():
+            return None
+
+        client = self._get_client()
+        self.select_folder(folder, readonly=True)
+
+        try:
+            result = client.fetch([uid], ["MODSEQ"])
+            if uid in result:
+                modseq_raw = result[uid].get(b"MODSEQ")
+                if modseq_raw and isinstance(modseq_raw, tuple) and len(modseq_raw) > 0:
+                    return int(modseq_raw[0])
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to fetch MODSEQ for uid {uid}: {e}")
+            return None
+
+    def _store_with_unchangedsince(
+        self,
+        uid: int,
+        folder: str,
+        flag: str,
+        add: bool,
+        unchangedsince: int,
+    ) -> MarkResult:
+        """Perform conditional STORE with UNCHANGEDSINCE modifier (RFC 4551).
+
+        This is the core CONDSTORE operation that provides race-condition protection.
+        The operation only succeeds if the message hasn't been modified since the
+        given modseq value.
+
+        Args:
+            uid: Email UID
+            folder: Folder containing the email
+            flag: Flag to add or remove (e.g., r"\\Seen")
+            add: True to add flag, False to remove
+            unchangedsince: The modseq value to use for conditional store
+
+        Returns:
+            MarkResult with success status and any MODIFIED UIDs
+
+        Raises:
+            ValueError: If CONDSTORE not supported
+        """
+        if not self.has_condstore_capability():
+            raise ValueError("Server does not support CONDSTORE")
+
+        client = self._get_client()
+        self.select_folder(folder)
+
+        # Build the STORE command with UNCHANGEDSINCE modifier
+        # Format: UID STORE <uid> (UNCHANGEDSINCE <modseq>) +FLAGS.SILENT (<flag>)
+        action = b"+FLAGS.SILENT" if add else b"-FLAGS.SILENT"
+        flag_bytes = flag.encode() if isinstance(flag, str) else flag
+
+        try:
+            # Use raw command for CONDSTORE STORE with modifier
+            # The command format is: UID STORE <uid> (UNCHANGEDSINCE <modseq>) +/-FLAGS.SILENT (<flags>)
+            result = client._raw_command_untagged(
+                b"STORE",
+                [
+                    str(uid).encode(),
+                    f"(UNCHANGEDSINCE {unchangedsince})".encode(),
+                    action,
+                    b"(" + flag_bytes + b")",
+                ],
+                uid=True,
+            )
+
+            # Check for MODIFIED response (indicates race condition)
+            modified_uids = []
+            if b"MODIFIED" in result:
+                modified_raw = result[b"MODIFIED"]
+                if modified_raw:
+                    # Parse the MODIFIED response which contains UIDs that weren't changed
+                    for item in modified_raw:
+                        if isinstance(item, bytes):
+                            for uid_str in item.decode().split(","):
+                                uid_str = uid_str.strip()
+                                if uid_str.isdigit():
+                                    modified_uids.append(int(uid_str))
+
+            if modified_uids:
+                logger.warning(
+                    f"STORE with UNCHANGEDSINCE {unchangedsince} failed for UIDs {modified_uids} "
+                    "(message was modified by another client)"
+                )
+                return MarkResult(
+                    success=False,
+                    modified=True,
+                    uids_not_modified=modified_uids,
+                )
+
+            # Success - try to get the new modseq from FETCH response
+            new_modseq = None
+            if b"FETCH" in result:
+                for fetch_data in result[b"FETCH"]:
+                    if isinstance(fetch_data, dict) and b"MODSEQ" in fetch_data:
+                        modseq_val = fetch_data[b"MODSEQ"]
+                        if isinstance(modseq_val, tuple) and len(modseq_val) > 0:
+                            new_modseq = int(modseq_val[0])
+
+            logger.debug(
+                f"STORE with UNCHANGEDSINCE {unchangedsince} succeeded for uid {uid}"
+            )
+            return MarkResult(success=True, new_modseq=new_modseq)
+
+        except Exception as e:
+            error_str = str(e).upper()
+            # Check if error message indicates MODIFIED
+            if "MODIFIED" in error_str:
+                logger.warning(f"STORE failed with MODIFIED for uid {uid}: {e}")
+                return MarkResult(
+                    success=False,
+                    modified=True,
+                    uids_not_modified=[uid],
+                )
+            logger.error(f"STORE with UNCHANGEDSINCE failed: {e}")
+            raise
 
     def get_capabilities(self) -> List[str]:
         """Get IMAP server capabilities.
@@ -756,37 +916,239 @@ class ImapClient:
 
         return sorted_emails
 
+    def _normalize_flag(self, flag: str) -> Tuple[str, bool]:
+        """Normalize flag name to IMAP flag format.
+
+        Args:
+            flag: Flag name (e.g., "read", "unread", "\\Seen", "flagged")
+
+        Returns:
+            Tuple of (normalized_flag, should_set) where:
+            - normalized_flag is the IMAP flag (e.g., "\\Seen")
+            - should_set is True if flag should be added, False if removed
+        """
+        flag_lower = flag.lower().strip()
+
+        # Handle special "read"/"unread" aliases
+        if flag_lower == "read":
+            return r"\Seen", True
+        if flag_lower == "unread":
+            return r"\Seen", False
+
+        # Handle common flag aliases
+        flag_map = {
+            "seen": r"\Seen",
+            "answered": r"\Answered",
+            "flagged": r"\Flagged",
+            "deleted": r"\Deleted",
+            "draft": r"\Draft",
+            "recent": r"\Recent",
+        }
+
+        # Check if it's an alias
+        if flag_lower in flag_map:
+            return flag_map[flag_lower], True
+
+        # Return as-is if it looks like an IMAP flag
+        if flag.startswith("\\"):
+            return flag, True
+
+        # Default: assume it's a custom flag
+        return flag, True
+
     def mark_email(
         self,
         uid: int,
         folder: str,
         flag: str,
         value: bool = True,
+        modseq: Optional[int] = None,
+        use_condstore: bool = True,
     ) -> bool:
-        """Mark email with flag.
+        """Mark email with flag, optionally using CONDSTORE for race-condition safety.
 
         Args:
             uid: Email UID
             folder: Folder containing the email
-            flag: Flag to set or remove
-            value: True to set, False to remove
+            flag: Flag to set or remove. Supports aliases:
+                  - "read" -> adds \\Seen
+                  - "unread" -> removes \\Seen
+                  - Standard IMAP flags (\\Seen, \\Flagged, etc.)
+            value: True to set, False to remove (ignored for "read"/"unread" aliases)
+            modseq: Optional MODSEQ for conditional store (UNCHANGEDSINCE).
+                    If provided with use_condstore=True, operation only succeeds
+                    if message hasn't been modified since this value.
+            use_condstore: Whether to use CONDSTORE if available. If True and
+                          modseq is None, will fetch current modseq first.
+                          Set to False to use simple STORE (faster but no race protection).
 
         Returns:
             True if successful
 
         Raises:
             ConnectionError: If not connected and connection fails
+            ModifiedError: If CONDSTORE is used and message was modified (race condition)
         """
+        # Normalize flag name (handles "read"/"unread" aliases)
+        normalized_flag, should_set = self._normalize_flag(flag)
+        # If explicit value provided and it conflicts with alias, use explicit value
+        # But for "read"/"unread" the alias determines the action
+        if flag.lower() not in ("read", "unread"):
+            should_set = value
+
+        logger.debug(
+            f"mark_email called: uid={uid}, flag={flag}->{normalized_flag}, "
+            f"should_set={should_set}, use_condstore={use_condstore}"
+        )
+
+        def _mark():
+            client = self._get_client()
+            self.select_folder(folder)
+            if should_set:
+                client.add_flags([uid], normalized_flag)
+                logger.debug(f"Added flag {normalized_flag} to message {uid}")
+            else:
+                client.remove_flags([uid], normalized_flag)
+                logger.debug(f"Removed flag {normalized_flag} from message {uid}")
+            return True
+
+        # If CONDSTORE requested and supported, use conditional store
+        if use_condstore and self.has_condstore_capability():
+            return self._mark_with_condstore(
+                uid, folder, normalized_flag, should_set, modseq
+            )
+
+        # Fall back to simple STORE
+        try:
+            return self._run_with_reconnect("mark_email", _mark)
+        except Exception as e:
+            logger.error(f"Failed to mark email: {e}")
+            return False
+
+    def _mark_with_condstore(
+        self,
+        uid: int,
+        folder: str,
+        flag: str,
+        value: bool,
+        modseq: Optional[int] = None,
+        max_retries: int = 2,
+    ) -> bool:
+        """Mark email with CONDSTORE support and automatic retry on race condition.
+
+        This method implements RFC 4551/7162 UNCHANGEDSINCE semantics with proper
+        retry handling for the MODIFIED response.
+
+        Args:
+            uid: Email UID
+            folder: Folder containing the email
+            flag: Flag to set or remove
+            value: True to add, False to remove
+            modseq: Starting modseq value (will fetch if not provided)
+            max_retries: Maximum retry attempts on MODIFIED response
+
+        Returns:
+            True if flag operation succeeded (including if already in desired state)
+
+        Raises:
+            ModifiedError: If max retries exceeded due to continuous modifications
+        """
+        # Get current modseq if not provided
+        current_modseq = modseq
+        if current_modseq is None:
+            current_modseq = self.get_message_modseq(uid, folder)
+            if current_modseq is None:
+                # CONDSTORE not working, fall back to simple store
+                logger.debug(f"Could not get MODSEQ for uid {uid}, using simple STORE")
+                return self._simple_mark(uid, folder, flag, value)
+
+        logger.info(
+            f"Using CONDSTORE for uid {uid} flag={flag} value={value} modseq={current_modseq}"
+        )
+
+        for attempt in range(max_retries + 1):
+            try:
+                result = self._store_with_unchangedsince(
+                    uid, folder, flag, add=value, unchangedsince=current_modseq
+                )
+
+                if result.success:
+                    logger.debug(
+                        f"CONDSTORE mark succeeded for uid {uid} "
+                        f"(attempt {attempt + 1}, new_modseq={result.new_modseq})"
+                    )
+                    return True
+
+                if result.modified:
+                    # Race condition - check if flag is already in desired state
+                    client = self._get_client()
+                    self.select_folder(folder, readonly=True)
+                    fetch_result = client.fetch([uid], ["FLAGS", "MODSEQ"])
+
+                    if uid not in fetch_result:
+                        logger.warning(f"Message {uid} not found after MODIFIED")
+                        return False
+
+                    current_flags = fetch_result[uid].get(b"FLAGS", [])
+                    current_flags_str = [
+                        f.decode("utf-8") if isinstance(f, bytes) else str(f)
+                        for f in current_flags
+                    ]
+
+                    # Normalize flag for comparison
+                    flag_normalized = flag.replace("\\", "").lower()
+                    has_flag = any(
+                        f.replace("\\", "").lower() == flag_normalized
+                        for f in current_flags_str
+                    )
+
+                    if (value and has_flag) or (not value and not has_flag):
+                        # Flag already in desired state - success!
+                        logger.debug(
+                            f"Flag {flag} already {'set' if value else 'unset'} "
+                            f"for uid {uid} (no action needed)"
+                        )
+                        return True
+
+                    # Update modseq for retry
+                    modseq_raw = fetch_result[uid].get(b"MODSEQ")
+                    if modseq_raw and isinstance(modseq_raw, tuple):
+                        current_modseq = int(modseq_raw[0])
+                        logger.debug(
+                            f"MODIFIED response for uid {uid}, "
+                            f"retrying with modseq {current_modseq} "
+                            f"(attempt {attempt + 2}/{max_retries + 1})"
+                        )
+                    else:
+                        logger.warning(f"Could not get new MODSEQ for uid {uid}")
+                        break
+
+            except Exception as e:
+                logger.error(f"CONDSTORE mark failed for uid {uid}: {e}")
+                if attempt == max_retries:
+                    raise
+                continue
+
+        # Max retries exceeded - raise error with current state
+        raise ModifiedError(
+            uid=uid,
+            current_modseq=current_modseq or 0,
+            message=(
+                f"Mark operation for uid {uid} failed after {max_retries + 1} attempts "
+                f"due to concurrent modifications"
+            ),
+        )
+
+    def _simple_mark(self, uid: int, folder: str, flag: str, value: bool) -> bool:
+        """Simple STORE without CONDSTORE (for fallback)."""
 
         def _mark():
             client = self._get_client()
             self.select_folder(folder)
             if value:
                 client.add_flags([uid], flag)
-                logger.debug(f"Added flag {flag} to message {uid}")
             else:
                 client.remove_flags([uid], flag)
-                logger.debug(f"Removed flag {flag} from message {uid}")
             return True
 
         try:
@@ -794,6 +1156,40 @@ class ImapClient:
         except Exception as e:
             logger.error(f"Failed to mark email: {e}")
             return False
+
+    def mark_email_batch(
+        self,
+        uids: List[int],
+        folder: str,
+        flag: str,
+        value: bool = True,
+        use_condstore: bool = True,
+    ) -> Dict[int, bool]:
+        """Mark multiple emails with flag, with optional CONDSTORE support.
+
+        Args:
+            uids: List of email UIDs
+            folder: Folder containing the emails
+            flag: Flag to set or remove
+            value: True to set, False to remove
+            use_condstore: Whether to use CONDSTORE if available
+
+        Returns:
+            Dictionary mapping UIDs to success status
+        """
+        results = {}
+        for uid in uids:
+            try:
+                results[uid] = self.mark_email(
+                    uid, folder, flag, value, use_condstore=use_condstore
+                )
+            except ModifiedError as e:
+                logger.warning(f"Mark failed for uid {uid} after retries: {e}")
+                results[uid] = False
+            except Exception as e:
+                logger.error(f"Mark failed for uid {uid}: {e}")
+                results[uid] = False
+        return results
 
     def move_email(self, uid: int, source_folder: str, target_folder: str) -> bool:
         """Move email to another folder.
