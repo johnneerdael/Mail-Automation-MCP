@@ -245,13 +245,15 @@ async def calendar_view(
             ),
             {},
         )
+        last_sync_dt = status_info.get("last_incremental_sync_at") or status_info.get(
+            "last_full_sync_at"
+        )
         cal_copy = {
             **cal,
             "id": cal_id,
             "selected": cal_id in selection_state["selected_ids"],
             "sync_status": status_info.get("status"),
-            "last_sync": status_info.get("last_incremental_sync_at")
-            or status_info.get("last_full_sync_at"),
+            "last_sync": last_sync_dt.isoformat() if last_sync_dt else None,
         }
         if cal_id in available:
             filtered_options.append(cal_copy)
