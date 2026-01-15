@@ -465,15 +465,38 @@
                 async checkForNew() {
                     try {
                         const response = await fetch('/api/notifications/check');
+                        
+                        // Handle non-OK responses (redirects, auth failures, etc.)
+                        if (!response.ok) {
+                            // If redirected to login, don't spam console
+                            if (response.status === 401 || response.redirected) {
+                                return;
+                            }
+                            console.warn('Notifications check failed:', response.status);
+                            return;
+                        }
+                        
+                        // Check content-type before parsing JSON
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            // Non-JSON response (likely HTML redirect page)
+                            return;
+                        }
+                        
                         const data = await response.json();
+                        
+                        // Validate response structure
+                        if (!data || typeof data !== 'object') {
+                            return;
+                        }
 
                         // Process new emails
-                        if (data.new_emails && data.new_emails.length > 0) {
+                        if (data.new_emails && Array.isArray(data.new_emails) && data.new_emails.length > 0) {
                             this.notifications = [
                                 ...data.new_emails.map(e => ({ ...e, type: 'email' })),
                                 ...this.notifications
                             ].slice(0, 20);
-                            this.unreadCount = data.count;
+                            this.unreadCount = data.count || 0;
 
                             if (this.notificationsEnabled && data.new_emails.length > 0) {
                                 const email = data.new_emails[0];
@@ -486,7 +509,7 @@
                         }
 
                         // Process calendar reminders
-                        if (data.calendar_reminders && data.calendar_reminders.length > 0) {
+                        if (data.calendar_reminders && Array.isArray(data.calendar_reminders) && data.calendar_reminders.length > 0) {
                             const reminders = data.calendar_reminders.map(r => ({
                                 type: 'calendar',
                                 id: r.id,
@@ -496,7 +519,7 @@
                             }));
 
                             this.notifications = [...reminders, ...this.notifications].slice(0, 20);
-                            this.unreadCount = data.count;
+                            this.unreadCount = data.count || 0;
 
                             if (this.notificationsEnabled) {
                                 reminders.forEach(r => {
@@ -509,7 +532,8 @@
                             }
                         }
                     } catch (e) {
-                        console.error('Failed to check notifications:', e);
+                        // Silently ignore notification check errors - they're not critical
+                        console.debug('Notifications check error:', e);
                     }
                 },
                 
