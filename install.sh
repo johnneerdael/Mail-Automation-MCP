@@ -291,14 +291,33 @@ fetch_registry() {
 
 get_profile_components() {
     local profile=$1
-    jq_exec ".profiles.${profile}.components[]" "$TEMP_DIR/registry.json"
+    jq_exec ".profiles.${profile}.components[]?" "$TEMP_DIR/registry.json"
 }
 
 get_component_info() {
     local component_id=$1
     local component_type=$2
     
-    jq_exec ".components.${component_type}[] | select(.id == \"${component_id}\")" "$TEMP_DIR/registry.json"
+    if [ "$component_type" = "context" ] && [[ "$component_id" == */* ]]; then
+        jq_exec "first(.components.contexts[]? | select(.path == \".opencode/context/${component_id}.md\"))" "$TEMP_DIR/registry.json"
+        return
+    fi
+
+    jq_exec ".components.${component_type}[]? | select(.id == \"${component_id}\" or (.aliases // [] | index(\"${component_id}\")))" "$TEMP_DIR/registry.json"
+}
+
+resolve_component_path() {
+    local component_type=$1
+    local component_id=$2
+    local registry_key
+    registry_key=$(get_registry_key "$component_type")
+
+    if [ "$component_type" = "context" ] && [[ "$component_id" == */* ]]; then
+        jq_exec "first(.components.contexts[]? | select(.path == \".opencode/context/${component_id}.md\") | .path)" "$TEMP_DIR/registry.json"
+        return
+    fi
+
+    jq_exec ".components.${registry_key}[]? | select(.id == \"${component_id}\" or (.aliases // [] | index(\"${component_id}\"))) | .path" "$TEMP_DIR/registry.json"
 }
 
 # Helper function to get the correct registry key for a component type
@@ -322,21 +341,120 @@ get_install_path() {
     echo "${INSTALL_DIR}/${relative_path}"
 }
 
+expand_context_wildcard() {
+    local pattern=$1
+    local prefix="${pattern%%\**}"
+
+    prefix="${prefix%/}"
+    if [ -n "$prefix" ]; then
+        prefix="${prefix}/"
+    fi
+
+    jq_exec ".components.contexts[]? | select(.path | startswith(\".opencode/context/${prefix}\")) | .path | sub(\"^\\\\.opencode/context/\"; \"\") | sub(\"\\\\.md$\"; \"\")" "$TEMP_DIR/registry.json"
+}
+
+expand_selected_components() {
+    local expanded=()
+
+    for comp in "${SELECTED_COMPONENTS[@]}"; do
+        local type="${comp%%:*}"
+        local id="${comp##*:}"
+
+        if [[ "$id" == *"*"* ]]; then
+            if [ "$type" != "context" ]; then
+                print_warning "Wildcard only supported for context components: ${comp}"
+                continue
+            fi
+
+            local matches
+            matches=$(expand_context_wildcard "$id")
+
+            if [ -z "$matches" ]; then
+                print_warning "No contexts matched: ${comp}"
+                continue
+            fi
+
+            while IFS= read -r match; do
+                [ -n "$match" ] && expanded+=("context:${match}")
+            done <<< "$matches"
+            continue
+        fi
+
+        expanded+=("$comp")
+    done
+
+    local deduped=()
+    for comp in "${expanded[@]}"; do
+        local found=0
+        for existing in "${deduped[@]}"; do
+            if [ "$existing" = "$comp" ]; then
+                found=1
+                break
+            fi
+        done
+        if [ "$found" -eq 0 ]; then
+            deduped+=("$comp")
+        fi
+    done
+
+    SELECTED_COMPONENTS=("${deduped[@]}")
+}
+
 resolve_dependencies() {
     local component=$1
     local type="${component%%:*}"
     local id="${component##*:}"
     
     # Get the correct registry key (handles singular/plural)
-    local registry_key=$(get_registry_key "$type")
+    local registry_key
+    registry_key=$(get_registry_key "$type")
     
     # Get dependencies for this component
-    local deps=$(jq_exec ".components.${registry_key}[] | select(.id == \"${id}\") | .dependencies[]?" "$TEMP_DIR/registry.json" 2>/dev/null || echo "")
+    local deps
+    deps=$(jq_exec ".components.${registry_key}[] | select(.id == \"${id}\" or (.aliases // [] | index(\"${id}\"))) | .dependencies[]?" "$TEMP_DIR/registry.json" 2>/dev/null || echo "")
     
     if [ -n "$deps" ]; then
         for dep in $deps; do
+            if [[ "$dep" == *"*"* ]]; then
+                local dep_type="${dep%%:*}"
+                local dep_id="${dep##*:}"
+
+                if [ "$dep_type" = "context" ]; then
+                    local matched
+                    matched=$(expand_context_wildcard "$dep_id")
+
+                    if [ -z "$matched" ]; then
+                        print_warning "No contexts matched dependency: ${dep}"
+                        continue
+                    fi
+
+                    while IFS= read -r match; do
+                        local expanded_dep="context:${match}"
+                        local found=0
+                        for existing in "${SELECTED_COMPONENTS[@]}"; do
+                            if [ "$existing" = "$expanded_dep" ]; then
+                                found=1
+                                break
+                            fi
+                        done
+                        if [ "$found" -eq 0 ]; then
+                            SELECTED_COMPONENTS+=("$expanded_dep")
+                            resolve_dependencies "$expanded_dep"
+                        fi
+                    done <<< "$matched"
+                    continue
+                fi
+            fi
+
             # Add dependency if not already in list
-            if [[ ! " ${SELECTED_COMPONENTS[@]} " =~ " ${dep} " ]]; then
+            local found=0
+            for existing in "${SELECTED_COMPONENTS[@]}"; do
+                if [ "$existing" = "$dep" ]; then
+                    found=1
+                    break
+                fi
+            done
+            if [ "$found" -eq 0 ]; then
                 SELECTED_COMPONENTS+=("$dep")
                 # Recursively resolve dependencies
                 resolve_dependencies "$dep"
@@ -381,7 +499,8 @@ show_install_location_menu() {
     clear
     print_header
     
-    local global_path=$(get_global_install_path)
+    local global_path
+    global_path=$(get_global_install_path)
     
     echo -e "${BOLD}Choose installation location:${NC}\n"
     echo -e "  ${GREEN}1) Local${NC} - Install to ${CYAN}.opencode/${NC} in current directory"
@@ -427,7 +546,8 @@ show_install_location_menu() {
                 return
             fi
             
-            local normalized_path=$(normalize_and_validate_path "$custom_path")
+            local normalized_path
+            normalized_path=$(normalize_and_validate_path "$custom_path")
             
             if [ $? -ne 0 ]; then
                 print_error "Invalid path"
@@ -478,7 +598,7 @@ show_main_menu() {
     case $choice in
         1) INSTALL_MODE="profile" ;;
         2) INSTALL_MODE="custom" ;;
-        3) list_components; show_main_menu ;;
+        3) list_components; read -p "Press Enter to continue..."; show_main_menu ;;
         4) cleanup_and_exit 0 ;;
         *) print_error "Invalid choice"; sleep 2; show_main_menu ;;
     esac
@@ -495,17 +615,23 @@ show_profile_menu() {
     echo -e "${BOLD}Available Installation Profiles:${NC}\n"
     
     # Essential profile
-    local essential_name=$(jq_exec '.profiles.essential.name' "$TEMP_DIR/registry.json")
-    local essential_desc=$(jq_exec '.profiles.essential.description' "$TEMP_DIR/registry.json")
-    local essential_count=$(jq_exec '.profiles.essential.components | length' "$TEMP_DIR/registry.json")
+    local essential_name
+    essential_name=$(jq_exec '.profiles.essential.name' "$TEMP_DIR/registry.json")
+    local essential_desc
+    essential_desc=$(jq_exec '.profiles.essential.description' "$TEMP_DIR/registry.json")
+    local essential_count
+    essential_count=$(jq_exec '.profiles.essential.components | length' "$TEMP_DIR/registry.json")
     echo -e "  ${GREEN}1) ${essential_name}${NC}"
     echo -e "     ${essential_desc}"
     echo -e "     Components: ${essential_count}\n"
     
     # Developer profile
-    local dev_desc=$(jq_exec '.profiles.developer.description' "$TEMP_DIR/registry.json")
-    local dev_count=$(jq_exec '.profiles.developer.components | length' "$TEMP_DIR/registry.json")
-    local dev_badge=$(jq_exec '.profiles.developer.badge // ""' "$TEMP_DIR/registry.json")
+    local dev_desc
+    dev_desc=$(jq_exec '.profiles.developer.description' "$TEMP_DIR/registry.json")
+    local dev_count
+    dev_count=$(jq_exec '.profiles.developer.components | length' "$TEMP_DIR/registry.json")
+    local dev_badge
+    dev_badge=$(jq_exec '.profiles.developer.badge // ""' "$TEMP_DIR/registry.json")
     if [ -n "$dev_badge" ]; then
         echo -e "  ${BLUE}2) Developer ${GREEN}[${dev_badge}]${NC}"
     else
@@ -515,25 +641,34 @@ show_profile_menu() {
     echo -e "     Components: ${dev_count}\n"
     
     # Business profile
-    local business_name=$(jq_exec '.profiles.business.name' "$TEMP_DIR/registry.json")
-    local business_desc=$(jq_exec '.profiles.business.description' "$TEMP_DIR/registry.json")
-    local business_count=$(jq_exec '.profiles.business.components | length' "$TEMP_DIR/registry.json")
+    local business_name
+    business_name=$(jq_exec '.profiles.business.name' "$TEMP_DIR/registry.json")
+    local business_desc
+    business_desc=$(jq_exec '.profiles.business.description' "$TEMP_DIR/registry.json")
+    local business_count
+    business_count=$(jq_exec '.profiles.business.components | length' "$TEMP_DIR/registry.json")
     echo -e "  ${CYAN}3) ${business_name}${NC}"
     echo -e "     ${business_desc}"
     echo -e "     Components: ${business_count}\n"
     
     # Full profile
-    local full_name=$(jq_exec '.profiles.full.name' "$TEMP_DIR/registry.json")
-    local full_desc=$(jq_exec '.profiles.full.description' "$TEMP_DIR/registry.json")
-    local full_count=$(jq_exec '.profiles.full.components | length' "$TEMP_DIR/registry.json")
+    local full_name
+    full_name=$(jq_exec '.profiles.full.name' "$TEMP_DIR/registry.json")
+    local full_desc
+    full_desc=$(jq_exec '.profiles.full.description' "$TEMP_DIR/registry.json")
+    local full_count
+    full_count=$(jq_exec '.profiles.full.components | length' "$TEMP_DIR/registry.json")
     echo -e "  ${MAGENTA}4) ${full_name}${NC}"
     echo -e "     ${full_desc}"
     echo -e "     Components: ${full_count}\n"
     
     # Advanced profile
-    local adv_name=$(jq_exec '.profiles.advanced.name' "$TEMP_DIR/registry.json")
-    local adv_desc=$(jq_exec '.profiles.advanced.description' "$TEMP_DIR/registry.json")
-    local adv_count=$(jq_exec '.profiles.advanced.components | length' "$TEMP_DIR/registry.json")
+    local adv_name
+    adv_name=$(jq_exec '.profiles.advanced.name' "$TEMP_DIR/registry.json")
+    local adv_desc
+    adv_desc=$(jq_exec '.profiles.advanced.description' "$TEMP_DIR/registry.json")
+    local adv_count
+    adv_count=$(jq_exec '.profiles.advanced.components | length' "$TEMP_DIR/registry.json")
     echo -e "  ${YELLOW}5) ${adv_name}${NC}"
     echo -e "     ${adv_desc}"
     echo -e "     Components: ${adv_count}\n"
@@ -559,6 +694,21 @@ show_profile_menu() {
     while IFS= read -r component; do
         [ -n "$component" ] && SELECTED_COMPONENTS+=("$component")
     done < "$temp_file"
+
+    expand_selected_components
+    
+    # Resolve dependencies for profile installs
+    print_step "Resolving dependencies..."
+    local original_count=${#SELECTED_COMPONENTS[@]}
+    for comp in "${SELECTED_COMPONENTS[@]}"; do
+        resolve_dependencies "$comp"
+    done
+    
+    local new_count=${#SELECTED_COMPONENTS[@]}
+    if [ "$new_count" -gt "$original_count" ]; then
+        local added=$((new_count - original_count))
+        print_info "Added $added dependencies"
+    fi
     
     show_installation_preview
 }
@@ -575,15 +725,17 @@ show_custom_menu() {
     echo "Use space to toggle, Enter to continue"
     echo ""
     
-    local categories=("agents" "subagents" "commands" "tools" "plugins" "contexts" "config")
+    local categories=("agents" "subagents" "commands" "tools" "plugins" "skills" "contexts" "config")
     local selected_categories=()
     
     # Simple selection (for now, we'll make it interactive later)
     echo "Available categories:"
     for i in "${!categories[@]}"; do
         local cat="${categories[$i]}"
-        local count=$(jq_exec ".components.${cat} | length" "$TEMP_DIR/registry.json")
-        local cat_display=$(echo "$cat" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+        local count
+        count=$(jq_exec ".components.${cat} | length" "$TEMP_DIR/registry.json")
+        local cat_display
+        cat_display=$(echo "$cat" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
         echo "  $((i+1))) ${cat_display} (${count} available)"
     done
     echo "  $((${#categories[@]}+1))) Select All"
@@ -628,15 +780,19 @@ show_component_selection() {
     local component_details=()
     
     for category in "${categories[@]}"; do
-        local cat_display=$(echo "$category" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+        local cat_display
+        cat_display=$(echo "$category" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
         echo -e "${CYAN}${BOLD}${cat_display}:${NC}"
         
-        local components=$(jq_exec ".components.${category}[] | .id" "$TEMP_DIR/registry.json")
+        local components
+        components=$(jq_exec ".components.${category}[]? | .id" "$TEMP_DIR/registry.json")
         
         local idx=1
         while IFS= read -r comp_id; do
-            local comp_name=$(jq_exec ".components.${category}[] | select(.id == \"${comp_id}\") | .name" "$TEMP_DIR/registry.json")
-            local comp_desc=$(jq_exec ".components.${category}[] | select(.id == \"${comp_id}\") | .description" "$TEMP_DIR/registry.json")
+            local comp_name
+            comp_name=$(jq_exec ".components.${category}[]? | select(.id == \"${comp_id}\") | .name" "$TEMP_DIR/registry.json")
+            local comp_desc
+            comp_desc=$(jq_exec ".components.${category}[]? | select(.id == \"${comp_id}\") | .description" "$TEMP_DIR/registry.json")
             
             echo "  ${idx}) ${comp_name}"
             echo "     ${comp_desc}"
@@ -714,6 +870,7 @@ show_installation_preview() {
     local commands=()
     local tools=()
     local plugins=()
+    local skills=()
     local contexts=()
     local configs=()
     
@@ -725,6 +882,7 @@ show_installation_preview() {
             command) commands+=("$comp") ;;
             tool) tools+=("$comp") ;;
             plugin) plugins+=("$comp") ;;
+            skill) skills+=("$comp") ;;
             context) contexts+=("$comp") ;;
             config) configs+=("$comp") ;;
         esac
@@ -735,6 +893,7 @@ show_installation_preview() {
     [ ${#commands[@]} -gt 0 ] && echo -e "${CYAN}Commands (${#commands[@]}):${NC} ${commands[*]##*:}"
     [ ${#tools[@]} -gt 0 ] && echo -e "${CYAN}Tools (${#tools[@]}):${NC} ${tools[*]##*:}"
     [ ${#plugins[@]} -gt 0 ] && echo -e "${CYAN}Plugins (${#plugins[@]}):${NC} ${plugins[*]##*:}"
+    [ ${#skills[@]} -gt 0 ] && echo -e "${CYAN}Skills (${#skills[@]}):${NC} ${skills[*]##*:}"
     [ ${#contexts[@]} -gt 0 ] && echo -e "${CYAN}Contexts (${#contexts[@]}):${NC} ${contexts[*]##*:}"
     [ ${#configs[@]} -gt 0 ] && echo -e "${CYAN}Config (${#configs[@]}):${NC} ${configs[*]##*:}"
     
@@ -775,6 +934,7 @@ show_collision_report() {
     local commands=()
     local tools=()
     local plugins=()
+    local skills=()
     local contexts=()
     local configs=()
     
@@ -792,6 +952,8 @@ show_collision_report() {
             tools+=("$file")
         elif [[ $file == *"/plugin/"* ]]; then
             plugins+=("$file")
+        elif [[ $file == *"/skill/"* ]]; then
+            skills+=("$file")
         elif [[ $file == *"/context/"* ]]; then
             contexts+=("$file")
         else
@@ -805,6 +967,7 @@ show_collision_report() {
     [ ${#commands[@]} -gt 0 ] && echo -e "${YELLOW}  Commands (${#commands[@]}):${NC}" && printf '    %s\n' "${commands[@]}"
     [ ${#tools[@]} -gt 0 ] && echo -e "${YELLOW}  Tools (${#tools[@]}):${NC}" && printf '    %s\n' "${tools[@]}"
     [ ${#plugins[@]} -gt 0 ] && echo -e "${YELLOW}  Plugins (${#plugins[@]}):${NC}" && printf '    %s\n' "${plugins[@]}"
+    [ ${#skills[@]} -gt 0 ] && echo -e "${YELLOW}  Skills (${#skills[@]}):${NC}" && printf '    %s\n' "${skills[@]}"
     [ ${#contexts[@]} -gt 0 ] && echo -e "${YELLOW}  Context (${#contexts[@]}):${NC}" && printf '    %s\n' "${contexts[@]}"
     [ ${#configs[@]} -gt 0 ] && echo -e "${YELLOW}  Config (${#configs[@]}):${NC}" && printf '    %s\n' "${configs[@]}"
     
@@ -853,11 +1016,14 @@ perform_installation() {
     for comp in "${SELECTED_COMPONENTS[@]}"; do
         local type="${comp%%:*}"
         local id="${comp##*:}"
-        local registry_key=$(get_registry_key "$type")
-        local path=$(jq_exec ".components.${registry_key}[] | select(.id == \"${id}\") | .path" "$TEMP_DIR/registry.json")
+        local registry_key
+        registry_key=$(get_registry_key "$type")
+        local path
+        path=$(resolve_component_path "$type" "$id")
         
         if [ -n "$path" ] && [ "$path" != "null" ]; then
-            local install_path=$(get_install_path "$path")
+            local install_path
+            install_path=$(get_install_path "$path")
             if [ -f "$install_path" ]; then
                 collisions+=("$install_path")
             fi
@@ -885,7 +1051,8 @@ perform_installation() {
         
         # Handle backup strategy
         if [ "$install_strategy" = "backup" ]; then
-            local backup_dir="${INSTALL_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+            local backup_dir
+            backup_dir="${INSTALL_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
             print_step "Creating backup..."
             
             # Only backup files that will be overwritten
@@ -924,10 +1091,12 @@ perform_installation() {
         local id="${comp##*:}"
         
         # Get the correct registry key (handles singular/plural)
-        local registry_key=$(get_registry_key "$type")
+        local registry_key
+        registry_key=$(get_registry_key "$type")
         
         # Get component path
-        local path=$(jq_exec ".components.${registry_key}[] | select(.id == \"${id}\") | .path" "$TEMP_DIR/registry.json")
+        local path
+        path=$(resolve_component_path "$type" "$id")
         
         if [ -z "$path" ] || [ "$path" = "null" ]; then
             print_warning "Could not find path for ${comp}"
@@ -936,7 +1105,8 @@ perform_installation() {
         fi
         
         # Convert registry path to installation path
-        local dest=$(get_install_path "$path")
+        local dest
+        dest=$(get_install_path "$path")
         
         # Check if file exists before we install (for proper messaging)
         local file_existed=false
@@ -984,7 +1154,8 @@ perform_installation() {
     
     # Handle additional paths for advanced profile
     if [ "$PROFILE" = "advanced" ]; then
-        local additional_paths=$(jq_exec '.profiles.advanced.additionalPaths[]?' "$TEMP_DIR/registry.json")
+        local additional_paths
+        additional_paths=$(jq_exec '.profiles.advanced.additionalPaths[]?' "$TEMP_DIR/registry.json")
         if [ -n "$additional_paths" ]; then
             print_step "Installing additional paths..."
             while IFS= read -r path; do
@@ -1028,7 +1199,22 @@ show_post_install() {
     # Show installation location info
     print_info "Installation directory: ${CYAN}${INSTALL_DIR}${NC}"
     
-    if [ -d "${INSTALL_DIR}.backup."* ] 2>/dev/null; then
+    # Check for backup directories
+    local has_backup=0
+    local backup_dir
+    local backup_dirs=()
+
+    shopt -s nullglob
+    backup_dirs=("${INSTALL_DIR}.backup."*)
+    shopt -u nullglob
+
+    for backup_dir in "${backup_dirs[@]}"; do
+        if [ -d "$backup_dir" ]; then
+            has_backup=1
+            break
+        fi
+    done
+    if [ "$has_backup" -eq 1 ]; then
         print_info "Backup created - you can restore files from ${INSTALL_DIR}.backup.* if needed"
     fi
     
@@ -1043,18 +1229,20 @@ show_post_install() {
 #############################################################################
 
 list_components() {
-    clear
+    clear || true
     print_header
     
     echo -e "${BOLD}Available Components${NC}\n"
     
-    local categories=("agents" "subagents" "commands" "tools" "plugins" "contexts")
+    local categories=("agents" "subagents" "commands" "tools" "plugins" "skills" "contexts")
     
     for category in "${categories[@]}"; do
-        local cat_display=$(echo "$category" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
+        local cat_display
+        cat_display=$(echo "$category" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
         echo -e "${CYAN}${BOLD}${cat_display}:${NC}"
         
-        local components=$(jq_exec ".components.${category}[] | \"\(.id)|\(.name)|\(.description)\"" "$TEMP_DIR/registry.json")
+        local components
+        components=$(jq_exec ".components.${category}[]? | \"\(.id)|\(.name)|\(.description)\"" "$TEMP_DIR/registry.json")
         
         while IFS='|' read -r id name desc; do
             echo -e "  ${GREEN}${name}${NC} (${id})"
@@ -1063,8 +1251,6 @@ list_components() {
         
         echo ""
     done
-    
-    read -p "Press Enter to continue..."
 }
 
 #############################################################################
@@ -1202,7 +1388,8 @@ main() {
     
     # Apply custom install directory if specified (CLI arg overrides env var)
     if [ -n "$CUSTOM_INSTALL_DIR" ]; then
-        local normalized_path=$(normalize_and_validate_path "$CUSTOM_INSTALL_DIR")
+        local normalized_path
+        normalized_path=$(normalize_and_validate_path "$CUSTOM_INSTALL_DIR")
         if [ $? -eq 0 ]; then
             INSTALL_DIR="$normalized_path"
             if ! validate_install_path "$INSTALL_DIR"; then
@@ -1226,6 +1413,22 @@ main() {
         while IFS= read -r component; do
             [ -n "$component" ] && SELECTED_COMPONENTS+=("$component")
         done < "$temp_file"
+
+        expand_selected_components
+
+        # Resolve dependencies for profile installs
+        print_step "Resolving dependencies..."
+        local original_count=${#SELECTED_COMPONENTS[@]}
+        for comp in "${SELECTED_COMPONENTS[@]}"; do
+            resolve_dependencies "$comp"
+        done
+
+        local new_count=${#SELECTED_COMPONENTS[@]}
+        if [ "$new_count" -gt "$original_count" ]; then
+            local added=$((new_count - original_count))
+            print_info "Added $added dependencies"
+        fi
+
         show_installation_preview
     else
         # Interactive mode - show location menu first
