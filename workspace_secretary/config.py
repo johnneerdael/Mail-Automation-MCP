@@ -89,8 +89,16 @@ class ImapConfig:
         host = data.get("host", "")
         is_gmail = host.endswith("gmail.com") or host.endswith("googlemail.com")
 
+        # Check if token.json exists (OAuth2 tokens from auth_setup)
+        token_paths = [
+            Path(os.environ.get("TOKEN_PATH", "config/token.json")),
+            Path("/app/config/token.json"),
+        ]
+        has_token_file = any(p.exists() for p in token_paths)
+
         # Log warning if credentials missing - server will start but remain unenrolled
-        if is_gmail and not oauth2_config and not password:
+        # Skip warning if token.json exists (OAuth2 is configured via auth_setup)
+        if is_gmail and not oauth2_config and not password and not has_token_file:
             logger.warning(
                 "Gmail credentials not configured. Choose one method:\n\n"
                 "  Option 1 - OAuth2 (recommended):\n"
