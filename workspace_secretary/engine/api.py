@@ -56,6 +56,66 @@ SECRETARY_LABELS = [
 ]
 
 
+def ensure_smart_labels() -> dict[str, Any]:
+    """Ensure all Secretary/* labels exist in Gmail. Called on startup.
+
+    Creates any missing labels. Safe to call multiple times (idempotent).
+    Returns dict with created/existing label counts.
+    """
+    if not state.imap_client:
+        return {"status": "error", "error": "IMAP client not connected"}
+
+    created = []
+    existing = []
+    errors = []
+
+    try:
+        # Get current Gmail labels
+        current_labels = {
+            f.decode() if isinstance(f, bytes) else f
+            for f in state.imap_client.client.list_folders()
+        }
+        current_label_names = {parts[-1] for parts in current_labels if parts}
+
+        # Also check by full path for nested labels
+        all_labels = set()
+        for folder_info in state.imap_client.client.list_folders():
+            if folder_info and len(folder_info) >= 3:
+                folder_name = folder_info[2]
+                if isinstance(folder_name, bytes):
+                    folder_name = folder_name.decode()
+                all_labels.add(folder_name)
+
+        for label in SECRETARY_LABELS:
+            if label in all_labels:
+                existing.append(label)
+                logger.debug(f"Label exists: {label}")
+            else:
+                try:
+                    state.imap_client.client.create_folder(label)
+                    created.append(label)
+                    logger.info(f"Created label: {label}")
+                except Exception as e:
+                    # Label might exist but wasn't found (Gmail quirk), or other error
+                    if "ALREADYEXISTS" in str(e).upper():
+                        existing.append(label)
+                    else:
+                        errors.append({"label": label, "error": str(e)})
+                        logger.warning(f"Failed to create label {label}: {e}")
+
+        return {
+            "status": "ok",
+            "created": created,
+            "existing": existing,
+            "errors": errors,
+            "total_required": len(SECRETARY_LABELS),
+        }
+
+    except Exception as e:
+        logger.error(f"Error ensuring smart labels: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 class EngineState:
     def __init__(self):
         self.config: Optional[ServerConfig] = None
@@ -213,6 +273,17 @@ async def try_enroll() -> bool:
 
         state.enrolled = True
         state.enrollment_error = None
+
+        label_result = ensure_smart_labels()
+        if label_result.get("status") == "ok":
+            created = label_result.get("created", [])
+            if created:
+                logger.info(f"Created {len(created)} Secretary labels: {created}")
+            else:
+                logger.info("All Secretary labels already exist")
+        else:
+            logger.warning(f"Label setup issue: {label_result.get('error', 'unknown')}")
+
         return True
 
     except Exception as e:
