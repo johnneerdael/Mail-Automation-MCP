@@ -30,6 +30,16 @@ htmlcov/
 .hypothesis/
 .pytest_cache/
 .opencode/
+
+# Data directories
+postgres-data/
+postgres_data/
+config/secretary.db
+*.db
+
+# Log files
+*_log.md
+
 # Virtual environment
 venv/
 env/
