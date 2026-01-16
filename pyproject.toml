@@ -49,6 +49,12 @@ dependencies = [
     "python-dateutil>=2.8.2",
     "cohere>=5.20.1",
     "google-genai>=1.57.0",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain-google-genai>=2.0.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
 ]
 
 [project.optional-dependencies]
