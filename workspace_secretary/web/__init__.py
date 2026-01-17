@@ -22,9 +22,11 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pathlib import Path
 
-from workspace_secretary.config import WebConfig
+from workspace_secretary.config import WebConfig, load_config_with_oauth2
 
 logger = logging.getLogger(__name__)
+
+_executor_task: Optional[asyncio.Task] = None
 
 # Initialize Jinja2 templates
 _templates_dir = Path(__file__).parent / "templates"
@@ -86,11 +88,53 @@ async def _health_check_loop():
         await asyncio.sleep(HEALTH_CHECK_INTERVAL_SECONDS)
 
 
+async def _init_shared_state():
+    from workspace_secretary.engine.api import state, _init_connection_pool, try_enroll
+    import asyncio
+    
+    enrolled = await try_enroll()
+    if not enrolled:
+        logger.warning("OAuth enrollment not complete - executor will wait for enrollment")
+        return
+    
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _init_connection_pool)
+    logger.info(f"Shared IMAP pool initialized with {state._imap_pool_size} connections")
+
+
+async def _executor_loop():
+    from workspace_secretary.executor.imap_executor import run_forever, ExecutorConfig
+    
+    try:
+        await run_forever(ExecutorConfig())
+    except asyncio.CancelledError:
+        logger.info("Executor loop cancelled")
+    except Exception as e:
+        logger.exception(f"Executor loop crashed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app):
+    global _executor_task
+    
+    await _init_shared_state()
+    
     health_check_task = asyncio.create_task(_health_check_loop())
     logger.info("Background health check started")
+    
+    _executor_task = asyncio.create_task(_executor_loop())
+    logger.info("Background job executor started")
+    
     yield
+    
+    if _executor_task:
+        _executor_task.cancel()
+        try:
+            await _executor_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Background job executor stopped")
+    
     health_check_task.cancel()
     try:
         await health_check_task

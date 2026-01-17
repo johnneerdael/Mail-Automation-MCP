@@ -16,6 +16,7 @@ from workspace_secretary.classifier import (
     CATEGORY_ACTIONS,
     CATEGORY_LABELS,
     EmailCategory,
+    prioritize_emails,
     triage_emails,
 )
 from workspace_secretary.db.queries import emails as email_queries
@@ -27,23 +28,101 @@ logger = logging.getLogger(__name__)
 
 
 @tool
+def prioritize_inbox(
+    folder: str = "INBOX",
+    limit: int = 500,
+    continuation_state: Optional[str] = None,
+) -> str:
+    """Fast pattern-based prioritization of inbox emails (NO LLM).
+
+    Processes ALL unread emails using pattern matching and signal analysis.
+    High-confidence items get labeled immediately. Unclear items get
+    Secretary/Unclear label for later LLM triage.
+
+    Run this FIRST before triage_inbox. Handles bulk email efficiently.
+
+    Args:
+        folder: Email folder to prioritize (default: INBOX)
+        limit: Max emails per batch (default: 500)
+        continuation_state: State from previous call for pagination
+
+    Returns:
+        JSON with prioritization results and job_id for label application
+    """
+    ctx = get_context()
+
+    offset = 0
+    if continuation_state:
+        try:
+            state = json.loads(continuation_state)
+            offset = state.get("offset", 0)
+        except json.JSONDecodeError:
+            pass
+
+    emails = email_queries.get_inbox_emails(
+        ctx.db,
+        folder=folder,
+        unread_only=False,
+        limit=limit,
+        offset=offset,
+    )
+
+    if not emails:
+        return json.dumps({
+            "status": "complete",
+            "message": "No emails to prioritize",
+            "total_processed": 0,
+        })
+
+    result = prioritize_emails(
+        emails=emails,
+        user_email=ctx.user_email,
+        user_name=ctx.user_name,
+        vip_senders=ctx.vip_senders,
+    )
+
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
+
+    all_items = []
+    for cat_key, classifications in result.by_category.items():
+        for c in classifications:
+            all_items.append(c.to_dict())
+
+    job_id = None
+    if all_items:
+        payload = {
+            "items": all_items,
+            "auto_apply_high_confidence": True,
+        }
+        job_id = imap_jobs_q.create_job(ctx.db, job_type="triage_apply", payload=payload)
+        imap_jobs_q.append_event(ctx.db, job_id, f"Prioritize job queued: {len(all_items)} items")
+
+    total_in_folder = email_queries.count_emails(ctx.db, folder)
+    has_more = (offset + len(emails)) < total_in_folder
+
+    return json.dumps({
+        "status": "partial" if has_more else "complete",
+        "has_more": has_more,
+        "continuation_state": json.dumps({"offset": offset + len(emails)}) if has_more else None,
+        "job_id": job_id,
+        "total_processed": result.total_processed,
+        "high_confidence_count": len(result.high_confidence),
+        "needs_review_count": len(result.needs_review),
+        "summary": {cat: len(items) for cat, items in result.by_category.items()},
+    })
+
+
+@tool
 async def triage_inbox(
     folder: str = "INBOX",
     limit: int = 100,
     continuation_state: Optional[str] = None,
 ) -> str:
-    """Intelligently triage inbox emails into categories.
+    """LLM-assisted triage for emails marked Secretary/Unclear.
 
-    Uses pattern matching, signal analysis, and LLM classification to
-    categorize emails into:
-    - action-required: Direct questions/requests needing your response
-    - fyi: CC'd emails, bulk, informational
-    - newsletter: Marketing, digests with unsubscribe
-    - notification: Zoom, GitHub, Google Docs, etc
-    - cleanup: Safe to archive
-
-    High confidence (>90%) items are auto-labeled without prompting.
-    Medium/low confidence items require your approval.
+    Run prioritize_inbox FIRST to label high-confidence emails.
+    This tool processes ONLY emails with Secretary/Unclear label,
+    sending them to LLM for deeper classification.
 
     Args:
         folder: Email folder to triage (default: INBOX)
@@ -63,26 +142,20 @@ async def triage_inbox(
         except json.JSONDecodeError:
             pass
 
-    emails = email_queries.get_inbox_emails(
+    emails = email_queries.get_emails_by_label(
         ctx.db,
+        label="Secretary/Unclear",
         folder=folder,
-        unread_only=True,
         limit=limit,
         offset=offset,
     )
 
     if not emails:
-        return json.dumps(
-            {
-                "status": "complete",
-                "message": "No unread emails to triage",
-                "total_processed": 0,
-            }
-        )
-
-    user_email = ctx.user_email
-    user_name = ctx.user_name
-    vip_senders = ctx.vip_senders
+        return json.dumps({
+            "status": "complete",
+            "message": "No unclear emails to triage. Run prioritize_inbox first.",
+            "total_processed": 0,
+        })
 
     from workspace_secretary.assistant.graph import create_llm
 
@@ -91,24 +164,39 @@ async def triage_inbox(
     result = await triage_emails(
         emails=emails,
         llm_client=llm_client,
-        user_email=user_email,
-        user_name=user_name,
-        vip_senders=vip_senders,
+        user_email=ctx.user_email,
+        user_name=ctx.user_name,
+        vip_senders=ctx.vip_senders,
     )
 
-    total_unread = email_queries.count_emails(ctx.db, folder)
-    has_more = (offset + len(emails)) < total_unread
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
 
-    return json.dumps(
-        {
-            "status": "partial" if has_more else "complete",
-            "has_more": has_more,
-            "continuation_state": json.dumps({"offset": offset + len(emails)})
-            if has_more
-            else None,
-            **result.to_dict(),
+    all_items = []
+    for cat_key, classifications in result.by_category.items():
+        for c in classifications:
+            item = c.to_dict()
+            item["remove_label"] = "Secretary/Unclear"
+            all_items.append(item)
+
+    job_id = None
+    if all_items:
+        payload = {
+            "items": all_items,
+            "auto_apply_high_confidence": True,
         }
-    )
+        job_id = imap_jobs_q.create_job(ctx.db, job_type="triage_apply", payload=payload)
+        imap_jobs_q.append_event(ctx.db, job_id, f"Triage job queued: {len(all_items)} items")
+
+    unclear_count = email_queries.count_emails_by_label(ctx.db, "Secretary/Unclear", folder)
+    has_more = (offset + len(emails)) < unclear_count
+
+    return json.dumps({
+        "status": "partial" if has_more else "complete",
+        "has_more": has_more,
+        "continuation_state": json.dumps({"offset": offset + len(emails)}) if has_more else None,
+        "job_id": job_id,
+        **result.to_dict(),
+    })
 
 
 @tool
@@ -131,7 +219,7 @@ def apply_triage_labels(
         auto_apply_high_confidence: If True, auto-apply all high confidence actions
 
     Returns:
-        JSON with results of label application
+        JSON with job_id for tracking progress
     """
     ctx = get_context()
 
@@ -140,56 +228,40 @@ def apply_triage_labels(
     except json.JSONDecodeError:
         return json.dumps({"error": "Invalid classifications JSON"})
 
-    results = {
-        "labels_applied": 0,
-        "marked_read": 0,
-        "archived": 0,
-        "errors": [],
-    }
+    if not items:
+        return json.dumps({"error": "No items to process", "count": 0})
 
+    job_items = []
     for item in items:
         uid = item.get("uid")
-        label = item.get("label")
-        actions = item.get("actions", [])
-        confidence = item.get("confidence", 0)
-
         if not uid:
             continue
+        job_items.append({
+            "uid": uid,
+            "folder": item.get("folder", "INBOX"),
+            "label": item.get("label"),
+            "actions": item.get("actions", []),
+            "confidence": item.get("confidence", 0),
+        })
 
-        try:
-            if label:
-                try:
-                    ctx.engine.modify_labels(uid, "INBOX", [label], action="add")
-                    results["labels_applied"] += 1
-                except Exception as e:
-                    logger.warning(f"Failed to apply label {label} to {uid}: {e}")
-                    results["errors"].append(
-                        {"uid": uid, "error": f"Label failed: {e}"}
-                    )
+    if not job_items:
+        return json.dumps({"error": "No valid items to process", "count": 0})
 
-            if confidence >= 0.90 and auto_apply_high_confidence:
-                if "mark_read" in actions:
-                    try:
-                        ctx.engine.mark_read(uid, "INBOX")
-                        email_queries.mark_email_read(
-                            ctx.db, uid, "INBOX", is_read=True
-                        )
-                        results["marked_read"] += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to mark {uid} as read: {e}")
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
 
-                if "archive" in actions:
-                    try:
-                        ctx.engine.move_email(uid, "INBOX", "[Gmail]/All Mail")
-                        email_queries.delete_email(ctx.db, uid, "INBOX")
-                        results["archived"] += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to archive {uid}: {e}")
+    payload = {
+        "items": job_items,
+        "auto_apply_high_confidence": auto_apply_high_confidence,
+    }
+    job_id = imap_jobs_q.create_job(ctx.db, job_type="triage_apply", payload=payload)
+    imap_jobs_q.append_event(ctx.db, job_id, f"Triage apply job queued: {len(job_items)} items")
 
-        except Exception as e:
-            results["errors"].append({"uid": uid, "error": str(e)})
-
-    return json.dumps(results)
+    return json.dumps({
+        "job_id": job_id,
+        "status": "pending",
+        "count": len(job_items),
+        "message": f"Queued {len(job_items)} emails for label application. Job ID: {job_id}",
+    })
 
 
 @tool

@@ -333,6 +333,125 @@ def initialize_mutation_journal(cur: Any) -> None:
     )
 
 
+def initialize_imap_jobs_schema(cur: Any) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS imap_jobs (
+            job_id UUID PRIMARY KEY,
+            job_type VARCHAR(50) NOT NULL,
+            status VARCHAR(20) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            started_at TIMESTAMP NULL,
+            finished_at TIMESTAMP NULL,
+            total_estimate INT DEFAULT 0,
+            processed INT DEFAULT 0,
+            cancel_requested BOOLEAN DEFAULT FALSE,
+            error TEXT NULL
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_imap_jobs_status_created_at
+            ON imap_jobs(status, created_at)
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS imap_job_events (
+            id BIGSERIAL PRIMARY KEY,
+            job_id UUID NOT NULL REFERENCES imap_jobs(job_id) ON DELETE CASCADE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            level VARCHAR(10) NOT NULL DEFAULT 'info',
+            message TEXT NOT NULL,
+            data JSONB NOT NULL DEFAULT '{}'::jsonb
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_imap_job_events_job_id_id
+            ON imap_job_events(job_id, id)
+        """
+    )
+
+    # Approval columns on imap_jobs (idempotent ADD COLUMN IF NOT EXISTS)
+    cur.execute(
+        """
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'imap_jobs' AND column_name = 'approved_at'
+            ) THEN
+                ALTER TABLE imap_jobs ADD COLUMN approved_at TIMESTAMP NULL;
+            END IF;
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'imap_jobs' AND column_name = 'approved_by'
+            ) THEN
+                ALTER TABLE imap_jobs ADD COLUMN approved_by VARCHAR(255) NULL;
+            END IF;
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'imap_jobs' AND column_name = 'approval_payload'
+            ) THEN
+                ALTER TABLE imap_jobs ADD COLUMN approval_payload JSONB NULL;
+            END IF;
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'imap_jobs' AND column_name = 'payload'
+            ) THEN
+                ALTER TABLE imap_jobs ADD COLUMN payload JSONB NULL;
+            END IF;
+        END
+        $$;
+        """
+    )
+
+    # Candidates table for triage/cleanup preview results
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS imap_job_candidates (
+            id BIGSERIAL PRIMARY KEY,
+            job_id UUID NOT NULL REFERENCES imap_jobs(job_id) ON DELETE CASCADE,
+            uid INT NOT NULL,
+            folder VARCHAR(255) NOT NULL,
+            message_id VARCHAR(512) NULL,
+            from_addr VARCHAR(512) NULL,
+            to_addr TEXT NULL,
+            cc_addr TEXT NULL,
+            subject TEXT NULL,
+            date TIMESTAMP NULL,
+            body_preview TEXT NULL,
+            category VARCHAR(50) NOT NULL,
+            confidence REAL NOT NULL,
+            signals JSONB NOT NULL DEFAULT '{}'::jsonb,
+            proposed_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+            user_decision VARCHAR(20) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_imap_job_candidates_job_id
+            ON imap_job_candidates(job_id)
+        """
+    )
+
+    cur.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_imap_job_candidates_confidence
+            ON imap_job_candidates(job_id, confidence DESC)
+        """
+    )
+
+
 def create_indexes(cur: Any, vector_type: str) -> None:
     """
     Create all indexes (idempotent).
@@ -429,15 +548,10 @@ def create_indexes(cur: Any, vector_type: str) -> None:
 def initialize_all_schemas(
     cur: Any, vector_type: str, embedding_dimensions: int
 ) -> None:
-    """
-    Initialize all schemas (core, embeddings, contacts, calendar, mutation journal, indexes).
-
-    This is the main entry point for both engine and web.
-    Self-healing is NOT included here (engine handles that separately).
-    """
     initialize_core_schema(cur, vector_type, embedding_dimensions)
     initialize_embeddings_schema(cur, vector_type, embedding_dimensions)
     initialize_contacts_schema(cur)
     initialize_calendar_schema(cur)
     initialize_mutation_journal(cur)
+    initialize_imap_jobs_schema(cur)
     create_indexes(cur, vector_type)

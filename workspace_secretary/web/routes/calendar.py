@@ -53,9 +53,9 @@ def _get_timezone(tz_name: Optional[str]) -> ZoneInfo:
     try:
         return ZoneInfo(name)
     except ZoneInfoNotFoundError:
-        logger.warning("Unknown timezone %s for booking link; defaulting to UTC", name)
+        logger.warning(f"Unknown timezone {name} for booking link; defaulting to UTC")
     except Exception:
-        logger.warning("Failed to load timezone %s; defaulting to UTC", name)
+        logger.warning(f"Failed to load timezone {name}; defaulting to UTC")
     return ZoneInfo("UTC")
 
 
@@ -246,7 +246,7 @@ async def calendar_view(
         if calendars_response.get("status") == "ok":
             calendar_options = calendars_response.get("calendars", []) or []
     except Exception as e:
-        logger.warning("Failed to load calendar list: %s", e)
+        logger.warning(f"Failed to load calendar list: {e}")
 
     filtered_options = []
     available = set(selection_state["available_ids"])
@@ -884,7 +884,7 @@ async def get_booking_slots(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to load booking slots for %s", link_id)
+        logger.exception(f"Failed to load booking slots for {link_id}")
         return JSONResponse(
             {
                 "success": False,
@@ -931,7 +931,7 @@ async def book_meeting(
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception("Failed to book meeting for %s", link_id)
+        logger.exception(f"Failed to book meeting for {link_id}")
         return JSONResponse(
             {
                 "success": False,

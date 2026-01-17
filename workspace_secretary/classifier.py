@@ -30,7 +30,7 @@ CATEGORY_LABELS: dict[EmailCategory, str | None] = {
     EmailCategory.NEWSLETTER: "Secretary/Newsletter",
     EmailCategory.NOTIFICATION: "Secretary/Notification",
     EmailCategory.CLEANUP: "Secretary/Auto-Cleaned",
-    EmailCategory.UNCLEAR: None,
+    EmailCategory.UNCLEAR: "Secretary/Unclear",
 }
 
 CATEGORY_ACTIONS: dict[EmailCategory, list[str]] = {
@@ -49,6 +49,7 @@ class Classification:
     category: EmailCategory
     confidence: float
     reasoning: str
+    folder: str = "INBOX"
     label: str | None = None
     actions: list[str] = field(default_factory=list)
 
@@ -61,6 +62,7 @@ class Classification:
     def to_dict(self) -> dict[str, Any]:
         return {
             "uid": self.uid,
+            "folder": self.folder,
             "category": self.category.value,
             "confidence": self.confidence,
             "reasoning": self.reasoning,
@@ -328,6 +330,54 @@ async def triage_emails(
             unclear_emails, llm_client, user_email, user_name, vip_senders
         )
         all_classifications.extend(llm_classifications)
+
+    by_category: dict[str, list[Classification]] = {}
+    high_confidence: list[Classification] = []
+    needs_review: list[Classification] = []
+
+    for c in all_classifications:
+        cat_key = c.category.value
+        if cat_key not in by_category:
+            by_category[cat_key] = []
+        by_category[cat_key].append(c)
+
+        if c.confidence >= 0.90:
+            high_confidence.append(c)
+        else:
+            needs_review.append(c)
+
+    return TriageResult(
+        total_processed=len(emails),
+        by_category=by_category,
+        high_confidence=high_confidence,
+        needs_review=needs_review,
+    )
+
+
+def prioritize_emails(
+    emails: list[dict[str, Any]],
+    user_email: str,
+    user_name: str,
+    vip_senders: list[str],
+) -> TriageResult:
+    """Fast prioritization pass: Pattern -> Signals only (NO LLM).
+    
+    Use this for bulk processing. High-confidence items get labeled,
+    unclear items get Secretary/Unclear label for later LLM triage.
+    """
+    from workspace_secretary.signals import analyze_extended_signals
+
+    all_classifications: list[Classification] = []
+
+    for email in emails:
+        signals = analyze_extended_signals(email, user_email, user_name, vip_senders)
+
+        classification = classify_email_fast(email, signals, user_email)
+
+        if classification is None:
+            classification = classify_email_signals(email, signals, user_email)
+
+        all_classifications.append(classification)
 
     by_category: dict[str, list[Classification]] = {}
     high_confidence: list[Classification] = []

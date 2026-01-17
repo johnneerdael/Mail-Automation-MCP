@@ -269,7 +269,7 @@ def route_after_llm(
     return "readonly_tools"
 
 
-def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str, Any]:
+async def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str, Any]:
     """Execute batch tools with continuation support.
 
     Runs the ENTIRE batch operation to completion, aggregating all results.
@@ -277,8 +277,9 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
     Supports up to 2000+ emails by continuing until has_more=false.
     Emits progress events for UI updates.
     """
+    import asyncio
     from langgraph.types import Command
-    from langchain_core.callbacks import dispatch_custom_event
+    from langchain_core.callbacks import adispatch_custom_event
 
     last_message = state["messages"][-1]
 
@@ -326,7 +327,7 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
     total_estimate = 0
 
     # Emit start event
-    dispatch_custom_event(
+    await adispatch_custom_event(
         "batch_progress",
         {
             "tool": tool_name,
@@ -346,7 +347,12 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
             tool_args["continuation_state"] = continuation_state
 
         try:
-            result_str = tool_fn.invoke(tool_args)
+            # Use ainvoke for async tools, invoke for sync tools
+            if asyncio.iscoroutinefunction(tool_fn.func):
+                result_str = await tool_fn.ainvoke(tool_args)
+            else:
+                result_str = tool_fn.invoke(tool_args)
+            result_str = result_str.strip()
             result = (
                 json.loads(result_str)
                 if result_str.startswith("{")
@@ -354,7 +360,7 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
             )
         except Exception as e:
             logger.error(f"Batch tool error on iteration {iteration}: {e}")
-            dispatch_custom_event(
+            await adispatch_custom_event(
                 "batch_progress",
                 {
                     "tool": tool_name,
@@ -392,7 +398,7 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
                 total_processed + (processed_this_batch if has_more else 0),
             )
 
-        dispatch_custom_event(
+        await adispatch_custom_event(
             "batch_progress",
             {
                 "tool": tool_name,
@@ -444,7 +450,7 @@ def batch_runner_node(state: AssistantState, config: RunnableConfig) -> dict[str
         **action_info,
     }
 
-    dispatch_custom_event(
+    await adispatch_custom_event(
         "batch_complete",
         completion_payload,
         config=config,

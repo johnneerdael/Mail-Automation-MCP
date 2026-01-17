@@ -70,7 +70,7 @@ async def dashboard(request: Request, session: Session = Depends(require_auth)):
             except ValueError:
                 upcoming_events.append(event_data)
     except Exception as e:
-        logger.error("Failed to load calendar events for dashboard: %s", e)
+        logger.error(f"Failed to load calendar events for dashboard: {e}")
 
     meetings_today = len(upcoming_events)
     upcoming_events = upcoming_events[:5]

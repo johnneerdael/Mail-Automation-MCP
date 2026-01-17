@@ -241,17 +241,26 @@ async def chat_message_stream(
                     tool_name = event.get("name", "unknown")
                     output = event.get("data", {}).get("output", "")
 
-                    try:
-                        if isinstance(output, str) and output.startswith("{"):
+                    internal_tools = {
+                        "quick_clean_inbox",
+                        "triage_inbox",
+                        "get_email_details",
+                        "search_emails",
+                        "get_inbox_emails",
+                    }
+
+                    if tool_name in internal_tools:
+                        continue
+
+                    if "Job ID:" in str(output):
+                        yield f"data: {json.dumps({'type': 'job_queued', 'tool': tool_name, 'message': str(output)[:500]})}\n\n"
+                    elif isinstance(output, str) and output.startswith("{"):
+                        try:
                             result = json.loads(output)
                             if "uids" in result and result.get("status") == "complete":
                                 yield f"data: {json.dumps({'type': 'batch_complete', 'tool': tool_name, **result})}\n\n"
-                            else:
-                                yield f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'output': str(output)[:500]})}\n\n"
-                        else:
-                            yield f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'output': str(output)[:500]})}\n\n"
-                    except (json.JSONDecodeError, TypeError):
-                        yield f"data: {json.dumps({'type': 'tool_end', 'tool': tool_name, 'output': str(output)[:500]})}\n\n"
+                        except (json.JSONDecodeError, TypeError):
+                            pass
 
                 elif event_type == "on_custom_event":
                     custom_name = event.get("name", "")
@@ -611,19 +620,8 @@ async def approve_batch(
     request: Request,
     session: Session = Depends(require_auth),
 ):
-    """Approve batch operation results and execute."""
-    from workspace_secretary.web.routes.analysis import get_config
-    from workspace_secretary.assistant.tools_mutation import (
-        execute_clean_batch,
-        process_email,
-    )
-    from workspace_secretary.assistant.context import get_context
-
-    config = get_config()
-    if not config:
-        return {"error": "Server configuration not available"}
-
-    _ensure_graph_initialized(config)
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
+    from workspace_secretary.web.database import get_db
 
     form = await request.form()
     approved_uids_json = str(form.get("uids", "[]"))
@@ -638,42 +636,38 @@ async def approve_batch(
     if not approved_uids:
         return {"error": "No items selected for approval"}
 
-    async def generate():
-        try:
-            yield f"data: {json.dumps({'type': 'batch_execute_start', 'count': len(approved_uids)})}\n\n"
+    db = get_db()
+    uids_data = [{"uid": uid, "folder": source_folder} for uid in approved_uids]
 
-            ctx = get_context()
-            success_count = 0
-            error_count = 0
+    if action == "archive":
+        destination = "Secretary/Auto-Cleaned"
+        mark_read = True
+    elif action == "mark_read":
+        destination = source_folder
+        mark_read = True
+    elif action == "delete":
+        destination = "[Gmail]/Trash"
+        mark_read = False
+    else:
+        destination = "Secretary/Auto-Cleaned"
+        mark_read = True
 
-            for uid in approved_uids:
-                try:
-                    if action == "archive":
-                        ctx.engine.move_email(
-                            uid, source_folder, "Secretary/Auto-Cleaned"
-                        )
-                        ctx.engine.mark_read(uid, "Secretary/Auto-Cleaned")
-                    elif action == "mark_read":
-                        ctx.engine.mark_read(uid, source_folder)
-                    elif action == "delete":
-                        ctx.engine.move_email(uid, source_folder, "[Gmail]/Trash")
-                    success_count += 1
-                except Exception as e:
-                    error_count += 1
-                    logger.warning(f"Failed to process email {uid}: {e}")
+    payload = {
+        "uids": uids_data,
+        "destination": destination,
+        "mark_read": mark_read,
+    }
+    job_id = imap_jobs_q.create_job(db, job_type="bulk_cleanup", payload=payload)
+    imap_jobs_q.append_event(
+        db, job_id, f"Bulk cleanup queued: {len(approved_uids)} emails -> {destination}"
+    )
 
-                if (success_count + error_count) % 10 == 0:
-                    yield f"data: {json.dumps({'type': 'batch_execute_progress', 'processed': success_count + error_count, 'total': len(approved_uids)})}\n\n"
-
-            yield f"data: {json.dumps({'type': 'batch_execute_complete', 'success': success_count, 'errors': error_count})}\n\n"
-            yield "data: [DONE]\n\n"
-
-        except Exception as e:
-            logger.exception(f"Batch execute error: {e}")
-            yield format_error_sse(str(e))
-            yield "data: [DONE]\n\n"
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    return {
+        "job_id": job_id,
+        "status": "pending",
+        "count": len(approved_uids),
+        "message": f"Queued {len(approved_uids)} emails for processing. Job ID: {job_id}",
+    }
 
 
 def group_items_by_confidence(items: list[dict]) -> dict[str, list[dict]]:
@@ -693,15 +687,14 @@ async def execute_action(
     request: Request,
     session: Session = Depends(require_auth),
 ):
-    """Execute a direct action from UI button click (bypasses LLM)."""
     from workspace_secretary.web.routes.analysis import get_config
-    from workspace_secretary.assistant.context import get_context
-    from workspace_secretary.db.queries import emails as email_queries
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
 
     config = get_config()
     if not config:
         return {"error": "Server configuration not available"}
 
+    db = get_db()
     _ensure_graph_initialized(config)
 
     try:
@@ -719,7 +712,6 @@ async def execute_action(
     action = body.get("action", "")
     uids = body.get("uids", [])
     folder = body.get("folder", "INBOX")
-    label = body.get("label", "")
     target = body.get("target", "Secretary/Auto-Cleaned")
 
     if not action:
@@ -727,27 +719,40 @@ async def execute_action(
     if not uids:
         return {"error": "No UIDs provided"}
 
+    if action == "archive":
+        payload = {
+            "uids": [{"uid": uid, "folder": folder} for uid in uids],
+            "destination": target,
+            "mark_read": True,
+        }
+        job_id = imap_jobs_q.create_job(db, "bulk_cleanup", payload=payload)
+        return {
+            "job_id": job_id,
+            "status": "pending",
+            "count": len(uids),
+            "message": f"Queued {len(uids)} emails for cleanup",
+        }
+
+    from workspace_secretary.assistant.context import get_context
+    from workspace_secretary.db.queries import emails as email_queries
+
     ctx = get_context()
     results = {"success": 0, "errors": 0, "action": action, "total": len(uids)}
 
     for uid in uids:
         try:
-            if action == "archive":
-                ctx.engine.move_email(uid, folder, target)
-                ctx.engine.mark_read(uid, target)
-                email_queries.delete_email(ctx.db, uid, folder)
-                results["success"] += 1
-
-            elif action == "mark_read":
+            if action == "mark_read":
                 ctx.engine.mark_read(uid, folder)
                 email_queries.mark_email_read(ctx.db, uid, folder, is_read=True)
                 results["success"] += 1
 
             elif action == "apply_label":
+                label = body.get("label", "")
                 ctx.engine.modify_labels(uid, folder, [label], action="add")
                 results["success"] += 1
 
             elif action == "apply_triage":
+                label = body.get("label", "")
                 ctx.engine.modify_labels(uid, folder, [label], action="add")
                 if body.get("apply_actions"):
                     ctx.engine.mark_read(uid, folder)

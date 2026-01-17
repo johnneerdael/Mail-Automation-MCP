@@ -25,6 +25,7 @@ build/
 
 # Project specific
 postgres_data/
+postgres_data_bak/
 tests/
 docs/
 examples/

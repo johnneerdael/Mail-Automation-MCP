@@ -292,7 +292,7 @@ def respond_to_meeting(
 
 @tool
 def execute_clean_batch(uids: list[int], folder: str = "INBOX") -> str:
-    """Execute approved batch cleanup - move emails to Secretary/Auto-Cleaned.
+    """Execute approved batch cleanup - queue emails for move to Secretary/Auto-Cleaned.
 
     ⚠️ MUTATION: Only call after user has approved the cleanup candidates.
 
@@ -301,30 +301,27 @@ def execute_clean_batch(uids: list[int], folder: str = "INBOX") -> str:
         folder: Source folder (default: INBOX)
 
     Returns:
-        Summary of cleaned emails.
+        Confirmation that the cleanup job has been queued.
     """
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
+
     ctx = get_context()
 
     if not uids:
         return "No UIDs provided for cleanup."
 
     destination = "Secretary/Auto-Cleaned"
-    success_count = 0
-    errors = []
+    uids_data = [{"uid": uid, "folder": folder} for uid in uids]
+    payload = {
+        "uids": uids_data,
+        "destination": destination,
+        "mark_read": True,
+    }
 
-    for uid in uids:
-        try:
-            ctx.engine.move_email(uid, folder, destination)
-            email_queries.delete_email(ctx.db, uid, folder)
-            success_count += 1
-        except Exception as e:
-            errors.append(f"UID {uid}: {e}")
+    job_id = imap_jobs_q.create_job(ctx.db, job_type="bulk_cleanup", payload=payload)
+    imap_jobs_q.append_event(ctx.db, job_id, f"Queued {len(uids)} emails for cleanup")
 
-    result = f"✅ Cleaned {success_count}/{len(uids)} emails → {destination}"
-    if errors:
-        result += f"\n\n⚠️ Errors ({len(errors)}):\n" + "\n".join(errors[:5])
-
-    return result
+    return f"✅ Queued {len(uids)} emails for cleanup → {destination}\n\nJob ID: {job_id}\nThe emails will be processed in the background by the IMAP executor."
 
 
 @tool

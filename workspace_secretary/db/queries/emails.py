@@ -302,6 +302,80 @@ def count_emails(db: DatabaseInterface, folder: str) -> int:
             return int(row[0]) if row else 0
 
 
+def count_emails_by_label(db: DatabaseInterface, label: str, folder: str = "INBOX") -> int:
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT COUNT(*) FROM emails WHERE folder = %s AND gmail_labels @> %s::jsonb",
+                (folder, json.dumps([label])),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def get_emails_by_label(
+    db: DatabaseInterface,
+    label: str,
+    folder: str = "INBOX",
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    with db.connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT uid, folder, message_id, subject, sender, recipients, cc, bcc,
+                       date, body_text, body_html, is_read, is_flagged, gmail_labels,
+                       has_attachments, attachment_count, thread_id
+                FROM emails
+                WHERE folder = %s AND gmail_labels @> %s::jsonb
+                ORDER BY date DESC
+                LIMIT %s OFFSET %s
+                """,
+                (folder, json.dumps([label]), limit, offset),
+            )
+            return list(cur.fetchall())
+
+
+def add_email_label(
+    db: DatabaseInterface,
+    uid: int,
+    folder: str,
+    label: str,
+) -> None:
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE emails 
+                SET gmail_labels = COALESCE(gmail_labels, '[]'::jsonb) || to_jsonb(%s::text)
+                WHERE uid = %s AND folder = %s
+                AND NOT (COALESCE(gmail_labels, '[]'::jsonb) @> to_jsonb(%s::text))
+                """,
+                (label, uid, folder, label),
+            )
+            conn.commit()
+
+
+def remove_email_label(
+    db: DatabaseInterface,
+    uid: int,
+    folder: str,
+    label: str,
+) -> None:
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE emails 
+                SET gmail_labels = gmail_labels - %s
+                WHERE uid = %s AND folder = %s
+                """,
+                (label, uid, folder),
+            )
+            conn.commit()
+
+
 # ============================================================================
 # Folder State Management (CONDSTORE)
 # ============================================================================

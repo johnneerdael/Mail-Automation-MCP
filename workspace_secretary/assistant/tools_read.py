@@ -651,22 +651,31 @@ def quick_clean_inbox(
 @tool
 def triage_priority_emails(
     folder: str = "INBOX",
-    limit: int = 50,
+    limit: int = 200,
     continuation_state: Optional[str] = None,
 ) -> str:
-    """Identify high-priority emails: user in To: with <5 recipients OR <15 recipients AND name in body.
+    """Fast pattern-based prioritization of inbox emails (NO LLM).
+
+    Classifies ALL emails using pattern matching and signal analysis.
+    High-confidence items get labeled immediately. Unclear items get
+    Secretary/Unclear label for later LLM triage via triage_remaining_emails.
+
+    Categories: action-required, fyi, newsletter, notification, cleanup, unclear
 
     Time-boxed to ~5 seconds. Returns partial results with continuation state.
 
     Args:
-        folder: Folder to triage (default: INBOX)
-        limit: Max emails to process per call (default: 50)
+        folder: Folder to prioritize (default: INBOX)
+        limit: Max emails to process per call (default: 200)
         continuation_state: State from previous call to continue processing
 
     Returns:
-        JSON with priority emails, signals, and continuation state.
+        JSON with category summary, job_id for label application, continuation state.
     """
     import time
+
+    from workspace_secretary.classifier import prioritize_emails
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
 
     ctx = get_context()
     start_time = time.time()
@@ -686,101 +695,95 @@ def triage_priority_emails(
         total_available = email_queries.count_emails(ctx.db, folder)
 
     emails = email_queries.get_inbox_emails(
-        ctx.db, folder, limit, offset, unread_only=True
+        ctx.db, folder, limit, offset, unread_only=False
     )
 
-    priority_emails = []
+    if not emails:
+        return json.dumps({
+            "status": "complete",
+            "message": "No emails to prioritize",
+            "total_processed": 0,
+            "high_confidence": 0,
+            "needs_review": 0,
+            "summary": {},
+        })
+
+    batch_emails = []
     processed_count = 0
+    skipped_already_labeled = 0
 
     for email in emails:
-        # Check timeout
         if time.time() - start_time > timeout:
             break
 
         processed_count += 1
 
-        # Get full email for signals
+        gmail_labels = email.get("gmail_labels") or []
+        if any(lbl.startswith("Secretary/") for lbl in gmail_labels):
+            skipped_already_labeled += 1
+            continue
+
         full_email = email_queries.get_email(ctx.db, email["uid"], folder)
-        if not full_email:
-            continue
+        if full_email:
+            batch_emails.append(full_email)
 
-        # Analyze signals
-        signals = _analyze_email_signals(full_email, ctx)
+    result = prioritize_emails(
+        emails=batch_emails,
+        user_email=ctx.user_email,
+        user_name=ctx.user_name,
+        vip_senders=ctx.vip_senders,
+    )
 
-        # Check if addressed to user
-        to_addr = (full_email.get("to_addr") or "").lower()
-        user_email_lower = ctx.user_email.lower()
+    all_items = []
+    for cat_key, classifications in result.by_category.items():
+        for c in classifications:
+            all_items.append(c.to_dict())
 
-        if user_email_lower not in to_addr:
-            continue
+    job_id = None
+    if all_items:
+        payload = {
+            "items": all_items,
+            "auto_apply_high_confidence": True,
+        }
+        job_id = imap_jobs_q.create_job(ctx.db, job_type="triage_apply", payload=payload)
+        imap_jobs_q.append_event(ctx.db, job_id, f"Prioritize job queued: {len(all_items)} items")
 
-        # Count recipients
-        recipient_count = len([r.strip() for r in to_addr.split(",") if r.strip()])
-
-        # Priority logic
-        is_priority = False
-        if recipient_count < 5:
-            is_priority = True
-        elif recipient_count < 15 and signals["mentions_my_name"]:
-            is_priority = True
-
-        if not is_priority:
-            continue
-
-        # Add to priority list
-        priority_emails.append(
-            {
-                "uid": full_email["uid"],
-                "from_addr": full_email.get("from_addr", ""),
-                "to_addr": full_email.get("to_addr", ""),
-                "cc_addr": full_email.get("cc_addr", ""),
-                "subject": full_email.get("subject", ""),
-                "date": _format_date(full_email.get("date")),
-                "preview": (full_email.get("body_text") or "")[:300],
-                "signals": {
-                    "is_from_vip": signals["is_from_vip"],
-                    "is_addressed_to_me": signals["is_addressed_to_me"],
-                    "mentions_my_name": signals["mentions_my_name"],
-                    "has_question": signals["has_question"],
-                    "mentions_deadline": signals["mentions_deadline"],
-                    "mentions_meeting": signals["mentions_meeting"],
-                    "has_attachments": signals["has_attachments"],
-                },
-            }
-        )
-
-    # Determine if we have more to process
-    has_more = processed_count >= limit and time.time() - start_time < timeout
+    has_more = (offset + processed_count) < (total_available or 0)
     status = "partial" if has_more else "complete"
 
     new_continuation_state = None
     if has_more:
-        new_continuation_state = json.dumps(
-            {
-                "offset": offset + processed_count,
-                "total_available": total_available,
-            }
-        )
+        new_continuation_state = json.dumps({
+            "offset": offset + processed_count,
+            "total_available": total_available,
+        })
 
-    result = {
+    return json.dumps({
         "status": status,
-        "priority_emails": priority_emails,
         "has_more": has_more,
         "continuation_state": new_continuation_state,
+        "job_id": job_id,
+        "total_processed": result.total_processed,
+        "high_confidence": len(result.high_confidence),
+        "needs_review": len(result.needs_review),
+        "summary": {cat: len(items) for cat, items in result.by_category.items()},
         "processed_count": processed_count,
+        "skipped_already_labeled": skipped_already_labeled,
         "total_available": total_available,
-    }
-
-    return json.dumps(result, indent=2)
+    })
 
 
 @tool
-def triage_remaining_emails(
+async def triage_remaining_emails(
     folder: str = "INBOX",
     limit: int = 50,
     continuation_state: Optional[str] = None,
 ) -> str:
-    """Process remaining emails not caught by priority triage with signals for human decision.
+    """LLM-assisted triage for emails labeled Secretary/Unclear.
+
+    Run triage_priority_emails FIRST to label high-confidence emails.
+    This tool processes ONLY emails with Secretary/Unclear label,
+    sending them to LLM for classification and replacing the label.
 
     Time-boxed to ~5 seconds. Returns partial results with continuation state.
 
@@ -790,9 +793,12 @@ def triage_remaining_emails(
         continuation_state: State from previous call to continue processing
 
     Returns:
-        JSON with remaining emails, signals, and continuation state.
+        JSON with triage results, job_id for label application, continuation state.
     """
     import time
+
+    from workspace_secretary.classifier import triage_emails
+    from workspace_secretary.db.queries import imap_jobs as imap_jobs_q
 
     ctx = get_context()
     start_time = time.time()
@@ -809,75 +815,91 @@ def triage_remaining_emails(
             pass
 
     if offset == 0:
-        total_available = email_queries.count_emails(ctx.db, folder)
+        total_available = email_queries.count_emails_by_label(ctx.db, "Secretary/Unclear", folder)
 
-    emails = email_queries.get_inbox_emails(
-        ctx.db, folder, limit, offset, unread_only=True
+    if total_available == 0:
+        return json.dumps({
+            "status": "complete",
+            "message": "No unclear emails to triage. Run triage_priority_emails first.",
+            "total_processed": 0,
+            "high_confidence": 0,
+            "needs_review": 0,
+            "summary": {},
+        })
+
+    emails = email_queries.get_emails_by_label(
+        ctx.db, "Secretary/Unclear", folder, limit, offset
     )
 
-    remaining_emails = []
+    if not emails:
+        return json.dumps({
+            "status": "complete",
+            "message": "No more unclear emails to process.",
+            "total_processed": 0,
+        })
+
+    batch_emails = []
     processed_count = 0
 
     for email in emails:
-        # Check timeout
         if time.time() - start_time > timeout:
             break
 
-        processed_count += 1
-
-        # Get full email for signals
         full_email = email_queries.get_email(ctx.db, email["uid"], folder)
-        if not full_email:
-            continue
+        if full_email:
+            batch_emails.append(full_email)
+            processed_count += 1
 
-        # Analyze signals
-        signals = _analyze_email_signals(full_email, ctx)
+    from workspace_secretary.assistant.graph import create_llm
 
-        # Add to remaining list
-        remaining_emails.append(
-            {
-                "uid": full_email["uid"],
-                "from_addr": full_email.get("from_addr", ""),
-                "to_addr": full_email.get("to_addr", ""),
-                "cc_addr": full_email.get("cc_addr", ""),
-                "subject": full_email.get("subject", ""),
-                "date": _format_date(full_email.get("date")),
-                "preview": (full_email.get("body_text") or "")[:300],
-                "signals": {
-                    "is_from_vip": signals["is_from_vip"],
-                    "is_addressed_to_me": signals["is_addressed_to_me"],
-                    "mentions_my_name": signals["mentions_my_name"],
-                    "has_question": signals["has_question"],
-                    "mentions_deadline": signals["mentions_deadline"],
-                    "mentions_meeting": signals["mentions_meeting"],
-                    "has_attachments": signals["has_attachments"],
-                },
-            }
-        )
+    llm_client = create_llm(ctx.config)
 
-    # Determine if we have more to process
-    has_more = processed_count >= limit and time.time() - start_time < timeout
+    result = await triage_emails(
+        emails=batch_emails,
+        llm_client=llm_client,
+        user_email=ctx.user_email,
+        user_name=ctx.user_name,
+        vip_senders=ctx.vip_senders,
+    )
+
+    all_items = []
+    for cat_key, classifications in result.by_category.items():
+        for c in classifications:
+            item = c.to_dict()
+            item["remove_label"] = "Secretary/Unclear"
+            all_items.append(item)
+
+    job_id = None
+    if all_items:
+        payload = {
+            "items": all_items,
+            "auto_apply_high_confidence": True,
+        }
+        job_id = imap_jobs_q.create_job(ctx.db, job_type="triage_apply", payload=payload)
+        imap_jobs_q.append_event(ctx.db, job_id, f"Triage job queued: {len(all_items)} items")
+
+    has_more = (offset + processed_count) < (total_available or 0)
     status = "partial" if has_more else "complete"
 
     new_continuation_state = None
     if has_more:
-        new_continuation_state = json.dumps(
-            {
-                "offset": offset + processed_count,
-                "total_available": total_available,
-            }
-        )
+        new_continuation_state = json.dumps({
+            "offset": offset + processed_count,
+            "total_available": total_available,
+        })
 
-    result = {
+    return json.dumps({
         "status": status,
-        "remaining_emails": remaining_emails,
         "has_more": has_more,
         "continuation_state": new_continuation_state,
+        "job_id": job_id,
+        "total_processed": result.total_processed,
+        "high_confidence": len(result.high_confidence),
+        "needs_review": len(result.needs_review),
+        "summary": {cat: len(items) for cat, items in result.by_category.items()},
         "processed_count": processed_count,
         "total_available": total_available,
-    }
-
-    return json.dumps(result, indent=2)
+    })
 
 
 # =============================================================================

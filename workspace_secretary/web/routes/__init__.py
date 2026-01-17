@@ -7,6 +7,7 @@ from . import (
     dashboard,
     health,
     jobs,
+    imap_jobs,
     notifications,
     settings,
     sync,

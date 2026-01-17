@@ -53,6 +53,9 @@ SECRETARY_LABELS = [
     "Secretary/Waiting",
     "Secretary/Auto-Cleaned",
     "Secretary/Drafts",
+    "Secretary/FYI",
+    "Secretary/Notification",
+    "Secretary/Unclear",
 ]
 
 

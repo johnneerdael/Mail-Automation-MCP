@@ -35,7 +35,9 @@ def main():
         sync,
         health,
         jobs,
+        imap_jobs,
     )
+    from workspace_secretary.web import auth
     from workspace_secretary.web.llm_client import init_llm_client
     from workspace_secretary.config import load_config
 
@@ -48,6 +50,7 @@ def main():
         init_llm_client(None)
 
     web_app.include_router(dashboard.router)
+    web_app.include_router(auth.router)
     web_app.include_router(inbox.router)
     web_app.include_router(thread.router)
     web_app.include_router(search.router)
@@ -64,6 +67,7 @@ def main():
     web_app.include_router(sync.router)
     web_app.include_router(health.router)
     web_app.include_router(jobs.router)
+    web_app.include_router(imap_jobs.router)
 
     host = os.environ.get("WEB_HOST", "0.0.0.0")
     port = int(os.environ.get("WEB_PORT", "8080"))
